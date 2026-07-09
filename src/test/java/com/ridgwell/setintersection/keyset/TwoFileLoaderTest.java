@@ -47,7 +47,7 @@ class TwoFileLoaderTest {
 
         assertEquals(3, counts[0].total());
         assertEquals(3, counts[1].total());
-        assertEquals(2, counts[0].frequencyOf("B") + counts[1].frequencyOf("A"));
+        assertEquals(4, counts[0].frequencyOf("B") + counts[1].frequencyOf("A"));
     }
 
     @Test

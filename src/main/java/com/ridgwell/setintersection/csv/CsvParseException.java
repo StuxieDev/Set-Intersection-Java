@@ -2,7 +2,16 @@ package com.ridgwell.setintersection.csv;
 
 import java.io.IOException;
 
-/** Signals malformed CSV input: an unterminated quoted field, or a bare quote outside one. */
+/**
+ * Signals malformed CSV input: an unterminated quoted field, or a bare quote outside one.
+ *
+ * <p>This extends {@code IOException} directly rather than {@code keyset.KeysetException},
+ * even though the two read a lot alike (both are "this input is broken" errors). Doing it
+ * that way would make {@code csv} depend on {@code keyset}, on top of the dependency
+ * {@code keyset} already has on {@code csv} - which is the kind of two-way coupling between
+ * packages that's easy to introduce for a small consistency win and annoying to undo later.
+ * Callers that want to handle both together already can, by catching {@code IOException}.
+ */
 public final class CsvParseException extends IOException {
 
     private static final long serialVersionUID = 1L;

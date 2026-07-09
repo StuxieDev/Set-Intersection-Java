@@ -2,7 +2,14 @@ package com.ridgwell.setintersection.keyset;
 
 import java.io.IOException;
 
-/** Covers every keyset-level failure: unresolved header column, out-of-range column, empty file where a header was expected. */
+/**
+ * Covers every keyset-level failure: unresolved header column, out-of-range column, empty
+ * file where a header was expected.
+ *
+ * <p>A {@code csv.CsvParseException} is a sibling of this, not a subtype - see its own
+ * Javadoc for why. Both are plain {@code IOException}s, so a caller wanting to treat "the
+ * CSV was malformed" and "the columns didn't resolve" the same way already can.
+ */
 public final class KeysetException extends IOException {
 
     private static final long serialVersionUID = 1L;
