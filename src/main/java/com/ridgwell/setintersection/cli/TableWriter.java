@@ -12,11 +12,13 @@ final class TableWriter {
     }
 
     static void write(PrintStream out, Counts c1, Counts c2, Overlap overlap) {
-        out.printf("%-40s %12s %12s%n", "File", "Keys", "Distinct");
-        out.printf("%-40s %12d %12d%n", c1.path(), c1.total(), c1.distinct());
-        out.printf("%-40s %12d %12d%n", c2.path(), c2.total(), c2.distinct());
-        out.println();
-        out.printf("%-40s %12d%n", "Distinct overlap", overlap.distinct());
-        out.printf("%-40s %12d%n", "Total overlap", overlap.total());
+        // "\n", not "%n"/println: %n resolves to the platform line separator (CRLF on
+        // Windows), which would make piped output (grep, diff) inconsistent across platforms.
+        out.printf("%-40s %12s %12s\n", "File", "Keys", "Distinct");
+        out.printf("%-40s %12d %12d\n", c1.path(), c1.total(), c1.distinct());
+        out.printf("%-40s %12d %12d\n", c2.path(), c2.total(), c2.distinct());
+        out.print('\n');
+        out.printf("%-40s %12d\n", "Distinct overlap", overlap.distinct());
+        out.printf("%-40s %12d\n", "Total overlap", overlap.total());
     }
 }

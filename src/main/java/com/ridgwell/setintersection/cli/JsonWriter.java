@@ -24,8 +24,11 @@ final class JsonWriter {
         json.append("  ],\n");
         json.append("  \"distinct_overlap\": ").append(overlap.distinct()).append(",\n");
         json.append("  \"total_overlap\": ").append(overlap.total()).append('\n');
-        json.append('}');
-        out.println(json);
+        json.append("}\n");
+        // print, not println: the trailing '\n' above is always a literal LF, whereas
+        // println/%n resolve to the platform line separator (CRLF on Windows), which would
+        // make output non-deterministic across platforms for no benefit.
+        out.print(json);
     }
 
     private static void appendFile(StringBuilder json, Counts c, boolean hasMore) {

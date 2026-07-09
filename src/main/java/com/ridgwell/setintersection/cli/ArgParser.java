@@ -93,7 +93,7 @@ final class ArgParser {
                 .append(" -file1 <path> -file2 <path> [-header] [-column <spec>] [-delimiter <char>] [-json]\n");
         for (FlagSpec spec : specs.values()) {
             String placeholder = spec.type() == FlagType.BOOLEAN ? "" : " <value>";
-            sb.append(String.format("  -%s%-14s %s (default %s)%n", spec.name(), placeholder, spec.help(), quote(spec)));
+            sb.append(String.format("  -%s%-14s %s (default %s)\n", spec.name(), placeholder, spec.help(), quote(spec)));
         }
         return sb.toString();
     }
