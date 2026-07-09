@@ -249,8 +249,14 @@ synthetic file, warms up the JIT first, and averages five timed runs each. Run i
 
 ```sh
 mvn test-compile
-java -cp target/classes;target/test-classes com.ridgwell.setintersection.keyset.LoadBenchmark
+java -cp "target/classes;target/test-classes" com.ridgwell.setintersection.keyset.LoadBenchmark
 ```
+
+(`:` instead of `;` on a non-Windows classpath. The quotes around the classpath aren't
+optional on Windows, in either PowerShell or a POSIX shell like Git Bash - both treat a
+bare `;` as a command separator, not a classpath separator, so without them this silently
+splits into two broken commands instead of one working one. Only raw `cmd.exe` would have
+accepted it unquoted.)
 
 On an 8,000,000-row / ~87 MiB file, on a 32-core machine, a few runs looked like this:
 
