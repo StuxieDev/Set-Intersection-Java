@@ -33,6 +33,13 @@ same package, say) could sit next to it without touching anything. `io` and `csv
 depend on anything else in the project either - they're the two building blocks `keyset`
 is made of.
 
+Each package has a `package-info.java` with a one-paragraph overview and its dependencies
+spelled out. `mvn javadoc:javadoc` generates the full API docs to
+`target/site/apidocs/index.html` - `doclint` is on for real problems (a `@link` to
+something that doesn't exist, malformed HTML) but not for "missing", since plenty of
+one-line summaries here deliberately skip `@param`/`@return` on methods that don't need
+them spelled out.
+
 ## Build & run
 
 Needs JDK 21+ and Maven. No runtime dependencies, so `mvn package` gives you a jar you can
@@ -174,8 +181,25 @@ byte-identical, gzip, stdin, composite keys, the per-file overrides, and a threa
 interrupted mid-load (the interrupted flag has to survive the trip back through
 `Future.get()`, which is easy to accidentally swallow).
 
-Line coverage sits at ~90% (`mvn verify` generates the report at
-`target/site/jacoco/index.html`, and fails the build if it drops below 80%).
+Line coverage sits at ~94% (`mvn verify` generates the report at
+`target/site/jacoco/index.html`, and fails the build if it drops below 80%). That number
+isn't just asserted, either - I went looking at the per-class breakdown in the coverage
+report and found two classes sitting well below the rest: `DelimiterParser` at 40% (never
+had a dedicated test - only exercised incidentally through the CLI tests) and
+`ChunkedCsvLoader`'s private `BoundedInputStream` at 68% (its single-byte `read()`
+override turns out to be dead code under normal use - wrapping it in a
+`BufferedInputStream`, which `ChunkedCsvLoader` always does, means `BufferedInputStream`
+only ever calls the bulk `read(byte[], int, int)` form to refill its own buffer, so the
+single-byte override never actually runs unless something drives it directly). Both are
+package-private specifically so `DelimiterParserTest` and `BoundedInputStreamTest` could
+drive them directly rather than contort a CLI or chunked-load scenario into hitting a
+specific branch by accident.
+
+There's also `ChunkedCsvLoaderAwaitTest`, for the same reason as `TwoFileLoaderTest`'s
+interruption test: `ChunkedCsvLoader.await` unwraps whatever a chunk's virtual-thread task
+failed with, and getting a real chunk to fail with a non-`IOException` cause on demand
+isn't practical, so `await` is package-private too and the test hands it a hand-built
+`Future` directly.
 
 ## CI and static analysis
 
