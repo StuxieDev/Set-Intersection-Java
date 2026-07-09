@@ -1,8 +1,8 @@
 # set-intersection
 
-> Written by Leo Ridgwell as a technical test submission for InfoSum.  
-> Time spent: ~3.5 hours - a bit over the suggested 2-3, partly ramp-up  
-> time since Go is newer to me than other languages I've worked in.
+> Written by Leo Ridgwell as a technical test submission for InfoSum, then reworked in
+> Java as a Senior Java Engineer portfolio piece. Standard library only - no application
+> frameworks - built with Maven, tested with JUnit 5.
 
 Compares the keys in two CSV files and reports:
 
@@ -11,58 +11,58 @@ Compares the keys in two CSV files and reports:
 - the distinct overlap (how many distinct keys appear in both files)
 - the total overlap (see [How overlap is defined](#how-overlap-is-defined))
 
-Written for the InfoSum set-intersection exercise. `examples/A_f.csv` and
-`examples/B_f.csv` are the sample datasets from the task - single-column
-CSVs of UDPRN keys with a header row. The brief also asked for handling
-different CSV shapes (see [Flags](#flags)), thinking through larger files
-(see [Scaling](#scaling)), and being honest about accuracy if
-approximations are used - which they aren't here, everything is exact.
+`examples/A_f.csv` and `examples/B_f.csv` are the sample datasets from the original
+InfoSum task - single-column CSVs of UDPRN keys with a header row.
 
 ## Layout
 
 ```
-cmd/          CLI entrypoint (flag parsing, output formatting)
-keyset/       CSV reading, counting, and comparison logic
-examples/     sample UDPRN datasets from the task
+src/main/java/com/ridgwell/setintersection/
+  cli/          argument parsing, output formatting, the process entry point
+  keyset/       CSV-to-key-counts loading, comparison, chunked/concurrent loading
+  csv/          the hand-rolled CSV parser
+  collections/  the hand-rolled open-addressing map used for key counting
+  io/           file/gzip/stdin input sources
+src/test/java/  JUnit 5 tests, mirroring the same package layout
+examples/       sample UDPRN datasets from the original task
 ```
 
-The comparison logic lives in its own package (`keyset`) independent of the
-CLI, and `main` is under `cmd/` so another entrypoint (a small HTTP service
-wrapping the same package, say) could sit alongside it without reshuffling
-anything.
+`keyset` has no dependency on `cli`, so another entry point (an HTTP service wrapping the
+same package, say) could sit alongside the CLI without reshuffling anything. `io` and
+`csv` have no dependency on anything else in this project - they're pure, independently
+testable building blocks that `keyset` composes.
 
 ## Build & run
 
-Requires Go 1.21+, no external dependencies.
+Requires JDK 21+ and Maven. No runtime dependencies - `mvn package` produces a
+self-contained runnable jar.
 
 ```sh
-go build -o set-intersection.exe ./cmd
-./set-intersection -file1 examples/A_f.csv -file2 examples/B_f.csv -header -column udprn
+mvn package
+java -jar target/set-intersection.jar -file1 examples/A_f.csv -file2 examples/B_f.csv -header -column udprn
 ```
-
-or just `go run ./cmd -file1 examples/A_f.csv -file2 examples/B_f.csv -header -column udprn`.
-
-`make build`, `make test`, `make run` do the same via the Makefile.
 
 ### Flags
 
-| Flag         | Default      | Description                                                             |
-|--------------|--------------|-------------------------------------------------------------------------|
-| `-file1`     | *(required)* | Path to the first CSV file                                              |
-| `-file2`     | *(required)* | Path to the second CSV file                                             |
-| `-header`    | `false`      | Set if the CSV files have a header row                                  |
-| `-column`    | `0`          | Key column - a zero-based index, or a header name when `-header` is set |
-| `-delimiter` | `,`          | Field delimiter, e.g. `;` or `\t` for TSV                               |
-| `-json`      | `false`      | Print the result as JSON instead of a table                             |
+| Flag          | Default      | Description                                                              |
+|---------------|--------------|---------------------------------------------------------------------------|
+| `-file1`      | *(required)* | Path to the first CSV file, or `-` to read it from stdin                 |
+| `-file2`      | *(required)* | Path to the second CSV file, or `-` to read it from stdin                |
+| `-header`     | `false`      | Set if the CSV files have a header row (shared by both files)            |
+| `-column`     | `0`          | Key column(s): a zero-based index, a header name, or a comma-separated list of either for a composite key |
+| `-column1`/`-column2` | *(falls back to `-column`)* | Per-file override of `-column`                          |
+| `-delimiter`  | `,`          | Field delimiter, e.g. `;` or `\t` for TSV                                 |
+| `-delimiter1`/`-delimiter2` | *(falls back to `-delimiter`)* | Per-file override of `-delimiter`                |
+| `-json`       | `false`      | Print the result as JSON instead of a table                              |
+| `-help`/`-h`  | `false`      | Print usage and exit                                                     |
 
-`-header`/`-column`/`-delimiter` apply to both files - fine for comparing two
-exports from the same pipeline. If the two files are shaped differently,
-normalize one first (`cut`, `awk`, whatever's convenient).
+`-file1`/`-file2` ending in `.gz`/`.gzip` are transparently gzip-decompressed. At most one
+of the two may be `-` (stdin) - stdin can't be read twice.
 
 ### Example
 
 ```
-$ go run ./cmd -file1 examples/A_f.csv -file2 examples/B_f.csv -header -column udprn
+$ java -jar target/set-intersection.jar -file1 examples/A_f.csv -file2 examples/B_f.csv -header -column udprn
 File                                             Keys     Distinct
 examples/A_f.csv                                95000        72799
 examples/B_f.csv                                80000        72815
@@ -70,6 +70,10 @@ examples/B_f.csv                                80000        72815
 Distinct overlap                                58222
 Total overlap                                60627882
 ```
+
+These are the exact figures the original Go version recorded for the same files - a
+real cross-check between the two implementations, not just unit tests agreeing with
+themselves.
 
 ## How overlap is defined
 
@@ -82,85 +86,109 @@ Distinct Overlap = A C D F = 4
 Total Overlap = A C C D D F F F F F F = 11
 ```
 
-Distinct overlap is just the size of the set intersection - easy.
-
-Total overlap took a second look though. A plain multiset intersection
-(`min` of the two counts per key) gives `1+1+1+2 = 5` for this example, not
-11. Working backwards from 11 instead: `C` contributes 2 (1x2), `D`
-contributes 2 (2x1), `F` contributes 6 (2x3), `A` contributes 1 (1x1) - so
-each shared key contributes `count_in_file1 * count_in_file2`, not
-`min(count_in_file1, count_in_file2)`. That lines up with how the task
-describes it: "the maximum possible overlap" - the number of matching row
-pairs you'd get from a SQL join on the key with no dedup, since any
-occurrence in file A could line up with any occurrence in file B. `Compare`
-in `keyset/keyset.go` implements it that way, and `TestCompare_PDFExample`
+Distinct overlap is just the size of the set intersection. Total overlap is the "maximum
+possible overlap": for each key present in both files, every occurrence in file A could
+pair with every occurrence in file B, so each shared key contributes
+`count(a) * count(b)`, not `min(count(a), count(b))`. That's the same number a SQL inner
+join on the key would produce with no deduplication. `Compare` in `keyset/Compare.java`
+implements it that way, and `CompareTest.pdfWorkedExamplePinsDistinctAndTotalOverlap`
 pins the numbers down against the PDF's own example.
 
-Keys are treated as strings, not numbers, so `08034283` keeps its leading
-zero.
+Keys are treated as strings, not numbers, so `08034283` keeps its leading zero.
+
+## What's more advanced than a straight port
+
+This started as a like-for-like Go-to-Java port, then went further in three directions
+rather than staying feature-equivalent:
+
+- **A hand-rolled hash map.** Key frequency counting never uses `java.util.HashMap`.
+  `collections/StringIntOpenHashMap.java` is an open-addressing map with linear probing
+  over parallel arrays (`String[]` keys, `int[]` values, a tombstone-aware state array),
+  a Murmur3-style finalizer over `String.hashCode()` to avoid clustering on structured
+  keys (long runs of digits, as UDPRN keys are), and allocation-free iteration - no boxed
+  `Integer`, no `Map.Entry`.
+- **Concurrency at two levels, both via virtual threads.** The original Go version loads
+  its two files concurrently on two goroutines. `keyset/TwoFileLoader.java` does the same
+  with `Executors.newVirtualThreadPerTaskExecutor()`, and goes a level further: a single
+  large plain file is split into byte-range chunks (`ChunkPlanner`) and parsed in parallel
+  on their own virtual threads (`ChunkedCsvLoader`), with the per-chunk results merged
+  afterwards. Chunk boundaries are found by a single quote-aware sequential scan rather
+  than trying to resolve each boundary independently, which is unsound for CSV: whether a
+  given byte offset sits inside a quoted field depends on everything read since the last
+  known record start.
+- **A broader feature set.** Composite (multi-column) keys, gzip input, stdin input, and
+  per-file `-column`/`-delimiter` overrides - the Go README's own "if I had more time"
+  list, actually implemented. `keyset/CompositeKeyEncoder.java` combines multi-column keys
+  with length-prefixing (`"2:AB1:C"` for `("AB", "C")`) rather than a separator character,
+  so it's collision-free by construction with no escaping needed.
+
+Two smaller correctness points worth calling out:
+
+- `Overlap.total` is a `long`, not an `int`. Go's `int` is 64-bit on every real platform,
+  so `count(a) * count(b)` summed across many keys never overflows there in practice.
+  Java's `int` is always 32-bit - two files each containing on the order of 50,000
+  occurrences of one key already produces a product that overflows a 32-bit int, so this
+  isn't a style choice, it's required for correctness. `CompareTest` has a regression test
+  for exactly this.
+- The CSV parser (`csv/CsvReader.java`) is byte-oriented rather than `Reader`-based:
+  fields are accumulated as raw bytes and decoded to UTF-8 once, when complete. That's
+  safe because the only bytes it treats as control characters - the delimiter, `"`, `\r`,
+  `\n` - are all single-byte ASCII values below `0x80`, and UTF-8 continuation/lead bytes
+  for any multi-byte character are always `0x80` or above, so a multi-byte character can
+  never be mistaken for a control byte mid-scan. That also lets the same reader work
+  unmodified over a bounded byte range of a larger file, which the chunked loading path
+  depends on.
 
 ## Design notes
 
-- CSV files are streamed row by row rather than loaded whole, so memory is
-  driven by the number of distinct keys, not the number of rows.
-- The two files are read concurrently on separate goroutines, so wall-clock
-  time is roughly `max(file1, file2)` instead of the sum.
-- `Compare` walks whichever file has fewer distinct keys and looks each one
-  up in the other, so it's `O(min(distinct1, distinct2))`.
-- Standard library only - `go build` works with nothing else installed.
+- CSV files are streamed row by row rather than loaded whole, so memory for a serial load
+  is driven by the number of distinct keys, not the number of rows in the file.
+- `Compare` walks whichever file has fewer distinct keys and looks each one up in the
+  other, so it's `O(min(distinct1, distinct2))`.
+- `io.InputSource` is a sealed interface (`RegularFileSource`/`GzipFileSource`/
+  `StdinSource`), and `KeysetLoader.load` dispatches over it with Java 21 pattern matching
+  for switch - the compiler enforces that every kind of source is handled, and a fourth
+  kind would be a compile error at every switch until it's handled too.
+- Package dependencies are one-directional: `cli` depends on `keyset`, `keyset` depends on
+  `io` and `csv`, and `io`/`csv`/`collections` depend on nothing else in this project.
 
 ## Testing
 
 ```sh
-go test ./...
+mvn test
 ```
 
-`keyset/keyset_test.go` covers the PDF's worked example, header/no-header
-parsing, selecting the key column by name or index, leading zeros, and a
-few error cases (missing file, unknown column, out-of-range column).
-`cmd/main_test.go` drives the CLI end to end, including
-`-json` and a custom delimiter. Test fixtures are small CSVs written to a
-temp dir at test time rather than checked-in files - the `examples/` CSVs
-are for manual runs, not assertions, since there's no independently-known-
-correct overlap number for them to check against.
-
-The two input files are read concurrently (`loadBoth` in `cmd/main.go`), so
-it's also worth running with the race detector: `go test -race ./...`
-(needs cgo, so a C compiler - already present on most Linux/macOS setups,
-MinGW-w64 on Windows).
+Direct ports of every test from the original Go suite (the PDF's worked example,
+header/no-header parsing, selecting the key column by name or index, leading zeros, and
+the file-not-found/unknown-column/out-of-range-column error cases) plus new coverage for
+everything Java-only: the hash map (collisions, resizing, a degenerate all-same-key
+stress test cross-checked against `java.util.HashMap`), the CSV parser's quoting/escaping
+edge cases, chunk-boundary planning around quoted multi-line fields, a chunked-vs-serial
+parse of the same file producing byte-identical results, gzip input, stdin input,
+composite keys, and per-file overrides.
 
 ## Scaling
 
-Memory is one `map[string]int` per file, sized to the number of distinct
-keys - not the row count. I checked this holds up by running it against two
-synthetic files of 10M and 8M rows (~7.9M and ~6.6M distinct keys, ~180MB
-combined): about 6.7s wall clock, ~950MB peak memory, which tracks - a Go
-`map[string]int` costs roughly 60-100 bytes per entry once you include the
-string data and bucket overhead.
+Memory for a serial load is one `StringIntOpenHashMap` per file, sized to the number of
+distinct keys, not the row count - the same profile as the original Go version's
+`map[string]int`. For a single large plain file, `ChunkedCsvLoader` trades some of that
+memory-boundedness for wall-clock time above a 32 MiB threshold, splitting it into
+byte-range chunks parsed in parallel and merging the per-chunk maps back together.
 
-UDPRN specifically also has a natural ceiling: it's a Royal Mail identifier
-for UK delivery points, and there are only tens of millions of those in
-total, so the distinct key space (and this tool's memory use) is bounded
-regardless of row count. If the key type were something much larger or
-unbounded, the next steps would be an external sort-merge join or sharding
-by `hash(key) % N` to get past the memory limit, and HyperLogLog/MinHash for
-approximate counts if exact ones stopped being feasible - reporting an error
-bound alongside the estimate, per the task's own note on that.
+UDPRN specifically has a natural ceiling regardless: it's a Royal Mail identifier for UK
+delivery points, and there are only tens of millions of those in total, so the distinct
+key space (and this tool's memory use) is bounded regardless of row count. For a key type
+that were much larger or unbounded, the next steps would be an external sort-merge join or
+sharding by `hash(key) % N` to get past the memory limit, and HyperLogLog/MinHash for
+approximate counts if exact ones stopped being feasible - reporting an error bound
+alongside the estimate, per the task's own note on that.
 
 ## If I had more time
 
-- CI (GitHub Actions running build/vet/test/gofmt on push) and a benchmark
-  suite, so both correctness and performance regressions get caught
-  automatically rather than by hand.
-- Per-file `-column`/`-delimiter` overrides for comparing two files that
-  are shaped differently, plus reading from stdin, gzip input, and
-  composite (multi-column) keys.
-- The bigger-than-memory approaches from [Scaling](#scaling) - sort-merge
-  join, sharding, or approximate counting.
-- More use of goroutines: right now concurrency is just the two files
-  loading in parallel. A single large file could be split into byte-range
-  chunks, parsed on separate goroutines, and the per-chunk frequency maps
-  merged afterward - worth doing if profiling showed parsing, not I/O, was
-  the actual bottleneck.
-- Fuzz testing the CSV parsing path, and packaging (Dockerfile, prebuilt
-  binaries) so it doesn't need a Go toolchain to run.
+- Fuzz testing the CSV parsing path, and a benchmark suite so performance regressions get
+  caught automatically rather than by hand.
+- Extending composite keys to escape a literal comma in a header name (currently a known,
+  documented limitation of the CLI's own comma-splitting for `-column`/`-column1`/
+  `-column2`).
+- Packaging (a Dockerfile, a native image via GraalVM) so it doesn't need a JDK installed
+  to run.
