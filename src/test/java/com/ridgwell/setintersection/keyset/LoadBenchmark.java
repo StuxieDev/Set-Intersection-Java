@@ -16,6 +16,12 @@ import java.util.Random;
  * of the project - just {@code System.nanoTime()} around a few warmed-up runs, which is
  * good enough to tell a real effect apart from noise at this scale.
  *
+ * <p>Runs two scenarios with the same row count but very different key cardinality, because
+ * that turned out to matter: {@link ChunkedCsvLoader} merges every chunk's map back together
+ * on a single thread at the end, and that merge cost scales with how many distinct keys each
+ * chunk saw. A high-cardinality file (most rows distinct) pays a much bigger merge cost than
+ * a low-cardinality one (most rows repeats), even at the same row count.
+ *
  * <p>Run it with:
  * <pre>
  * mvn test-compile
@@ -26,7 +32,6 @@ import java.util.Random;
 public final class LoadBenchmark {
 
     private static final int ROW_COUNT = 8_000_000;
-    private static final int DISTINCT_KEYS = 2_000_000;
     private static final int WARMUP_RUNS = 2;
     private static final int TIMED_RUNS = 5;
 
@@ -34,15 +39,26 @@ public final class LoadBenchmark {
     }
 
     public static void main(String[] args) throws IOException {
+        System.out.println("Available processors: " + Runtime.getRuntime().availableProcessors());
+        System.out.println();
+
+        runScenario("High cardinality", ROW_COUNT, 2_000_000);
+        System.out.println();
+        System.out.println("=".repeat(60));
+        System.out.println();
+        runScenario("Low cardinality", ROW_COUNT, 1_000);
+    }
+
+    private static void runScenario(String label, int rowCount, int distinctKeys) throws IOException {
+        System.out.println(label + " (" + rowCount + " rows, " + distinctKeys + " distinct keys)");
+
         Path dir = Files.createTempDirectory("set-intersection-bench");
         Path file = dir.resolve("bench.csv");
         try {
-            System.out.println("Generating " + ROW_COUNT + " rows (" + DISTINCT_KEYS + " distinct keys)...");
-            generate(file, ROW_COUNT, DISTINCT_KEYS);
+            generate(file, rowCount, distinctKeys);
 
             long fileSize = Files.size(file);
             System.out.printf("File size: %.1f MiB%n", fileSize / (1024.0 * 1024.0));
-            System.out.println("Available processors: " + Runtime.getRuntime().availableProcessors());
             System.out.println();
 
             RegularFileSource source = new RegularFileSource(file);
