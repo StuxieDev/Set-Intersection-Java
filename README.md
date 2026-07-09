@@ -2,7 +2,8 @@
 
 > Originally written in Go by Leo Ridgwell as a technical test submission for InfoSum.
 > Rebuilt in Java for a Senior Java Engineer application. JDK standard library only, no
-> application frameworks - Maven for the build, JUnit 5 for tests.
+> application frameworks - Maven for the build, JUnit 5 for tests, JaCoCo and SpotBugs as
+> quality gates, GitHub Actions running all of it on every push.
 
 Compares the keys in two CSV files and reports:
 
@@ -116,6 +117,12 @@ that offset sits inside a quoted field depends on everything read since the last
 record start. So it's one sequential quote-aware scan from a known-good starting point,
 not N independent lookups.
 
+I didn't just take it on faith that this pays for itself, either - see
+[Benchmark](#benchmark) below. The first version genuinely didn't: that boundary scan was
+reading the file one byte at a time through a `synchronized` `InputStream.read()`, which
+made it slower than not chunking at all. Fixing that to read in bulk and scan the buffer
+in memory is what actually made the parallelism worth having.
+
 **More than the Go version could do.** Composite (multi-column) keys, gzip input, stdin,
 and per-file column/delimiter overrides - basically the Go README's own "if I had more
 time" list, done for real this time. Composite keys are length-prefixed
@@ -145,6 +152,11 @@ Worth flagging two smaller things too:
   fourth kind later and the compiler will point at every switch that needs updating.
 - Package dependencies only point one way: `cli` → `keyset` → `io`/`csv`. Nothing in `io`,
   `csv`, or `collections` depends on anything else here.
+- `csv.CsvParseException` and `keyset.KeysetException` are siblings under `IOException`,
+  not one extending the other, even though they read alike. Unifying them would mean `csv`
+  depending on `keyset` on top of the dependency that already runs the other way - a small
+  consistency win not worth a two-way coupling between packages. A caller that wants to
+  treat both the same way already can, by catching `IOException`.
 
 ## Testing
 
@@ -158,14 +170,73 @@ missing-file/unknown-column/out-of-range error cases. On top of that there's cov
 everything that's Java-only: the hash map (collisions, resizing, a stress test checked
 against a real `java.util.HashMap`), the CSV parser's quoting edge cases, chunk boundaries
 around quoted multi-line fields, a chunked-vs-serial parse of the same file coming out
-byte-identical, gzip, stdin, composite keys, and the per-file overrides.
+byte-identical, gzip, stdin, composite keys, the per-file overrides, and a thread getting
+interrupted mid-load (the interrupted flag has to survive the trip back through
+`Future.get()`, which is easy to accidentally swallow).
+
+Line coverage sits at ~90% (`mvn verify` generates the report at
+`target/site/jacoco/index.html`, and fails the build if it drops below 80%).
+
+## CI and static analysis
+
+`mvn verify` runs the full test suite, then [JaCoCo](https://www.jacoco.org/jacoco/) (coverage
+gate) and [SpotBugs](https://spotbugs.github.io/) (static analysis), and fails if either one
+finds something. `.github/workflows/ci.yml` runs the same `mvn verify` on every push and PR.
+
+SpotBugs flagged one thing worth mentioning rather than just silencing:
+`ArgParser.usage()` and `TableWriter.write()` build output with a literal `\n`, and
+SpotBugs' default advice is to prefer `%n`. That's usually right, but not here - `%n`
+resolves to the platform line separator, which is `\r\n` on Windows, and that would make
+the `-json` output fail an exact string comparison and leak stray `\r` into piped table
+output. `spotbugs-exclude.xml` suppresses that specific finding for those two classes, with
+a comment explaining why, instead of either reverting a deliberate fix or leaving a bug
+suppressed with no explanation.
+
+## Benchmark
+
+`LoadBenchmark` (under `src/test/java`, but not a JUnit test - it has no `@Test` methods,
+so `mvn test` skips it) times the serial path against the chunked one on the same
+synthetic file, warms up the JIT first, and averages five timed runs each. Run it with:
+
+```sh
+mvn test-compile
+java -cp target/classes;target/test-classes com.ridgwell.setintersection.keyset.LoadBenchmark
+```
+
+On an 8,000,000-row / ~87 MiB file, on a 32-core machine, a few runs looked like this:
+
+```
+High cardinality (8000000 rows, 2000000 distinct keys)
+Serial avg:  2.63s
+Chunked avg: 2.23s
+Speedup:     1.18x
+
+Low cardinality (8000000 rows, 1000 distinct keys)
+Serial avg:  0.79s
+Chunked avg: 0.17s
+Speedup:     4.61x
+```
+
+Two things worth calling out:
+
+- Cardinality matters more than I expected going in. `ChunkedCsvLoader` merges every
+  chunk's local map back into one at the end, on a single thread, and that merge cost
+  scales with how many distinct keys each chunk saw - not with the row count. A
+  high-cardinality file (most rows distinct, like the UDPRN data this tool is actually for)
+  pays a real merge cost and shows a modest win. A low-cardinality file (most rows repeats)
+  pays almost nothing to merge and shows a much bigger one.
+- Those numbers only exist because I went looking for them, and the first thing I found
+  wasn't a win at all - see the note in [What's actually different from a straight
+  port](#whats-actually-different-from-a-straight-port) about the boundary scan that used
+  to erase the whole benefit. Measuring it is what caught that.
 
 ## Scaling
 
 A normal load costs one `StringIntOpenHashMap` per file, sized to distinct keys rather
 than row count - same memory profile the Go version had with its `map[string]int`. Past
 32 MiB, a single plain file gets split into chunks and parsed in parallel instead, trading
-a bit of that memory-boundedness for wall-clock time.
+a bit of that memory-boundedness for wall-clock time (see [Benchmark](#benchmark) for
+whether that trade is actually worth it, which turns out to depend on the data).
 
 UDPRN has its own natural ceiling anyway - it's a Royal Mail identifier, and there are
 only tens of millions of delivery points in the UK, so the key space stays bounded no
@@ -176,8 +247,10 @@ error bound reported alongside, per the task's own note about that.
 
 ## If I had more time
 
-- Fuzz testing for the CSV parser, and a benchmark suite so a perf regression gets caught
-  automatically instead of by hand.
+- Fuzz testing for the CSV parser.
+- Wiring the benchmark into CI as an actual regression check, rather than something run by
+  hand and pasted into this README. That needs a machine whose timing is stable enough to
+  set a sane threshold against, which a shared CI runner usually isn't.
 - Composite keys can't currently handle a header name that itself contains a comma - the
   CLI's own comma-splitting for `-column`/`-column1`/`-column2` would misread it. Known
   limitation, not fixed.
