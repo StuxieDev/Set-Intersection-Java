@@ -5,6 +5,8 @@ import java.io.IOException;
 /** Signals malformed CSV input: an unterminated quoted field, or a bare quote outside one. */
 public final class CsvParseException extends IOException {
 
+    private static final long serialVersionUID = 1L;
+
     private final String sourceLabel;
     private final long recordNumber;
 

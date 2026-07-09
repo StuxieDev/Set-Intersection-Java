@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!--
+    ArgParser.usage() and TableWriter.write() use a literal "\n" on purpose, not "%n" -
+    see the comments at their call sites. "%n" resolves to the platform line separator
+    (CRLF on Windows), which would make JSON output invalid to exact-match against and
+    would leak stray \r into piped table output. SpotBugs' default advice (prefer %n) is
+    right in general, just not here.
+  -->
+  <Match>
+    <Class name="com.ridgwell.setintersection.cli.ArgParser" />
+    <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE" />
+  </Match>
+  <Match>
+    <Class name="com.ridgwell.setintersection.cli.TableWriter" />
+    <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE" />
+  </Match>
+</FindBugsFilter>
