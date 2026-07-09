@@ -88,6 +88,7 @@ public final class Cli {
         }
     }
 
+    /** Treats null and empty the same way - flags default to "" rather than null, so both need checking. */
     private static boolean isBlank(String s) {
         return s == null || s.isEmpty();
     }

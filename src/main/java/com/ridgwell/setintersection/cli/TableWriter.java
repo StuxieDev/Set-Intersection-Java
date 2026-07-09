@@ -11,6 +11,7 @@ final class TableWriter {
     private TableWriter() {
     }
 
+    /** File / Keys / Distinct for each side, a blank line, then the two overlap figures. */
     static void write(PrintStream out, Counts c1, Counts c2, Overlap overlap) {
         // "\n", not "%n"/println: %n resolves to the platform line separator (CRLF on
         // Windows), which would make piped output (grep, diff) inconsistent across platforms.

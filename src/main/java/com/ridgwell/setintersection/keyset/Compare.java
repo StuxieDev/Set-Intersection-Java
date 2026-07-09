@@ -31,6 +31,8 @@ public final class Compare {
         return new Overlap(accumulator.distinct, accumulator.total);
     }
 
+    // A plain mutable holder the forEachKey lambda below can close over - cleaner than the
+    // usual int[1]/long[1] trick for getting a value out of a lambda.
     private static final class Accumulator {
         int distinct;
         long total;

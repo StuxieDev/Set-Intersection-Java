@@ -6,6 +6,7 @@ public final class Main {
     private Main() {
     }
 
+    /** Delegates to {@link Cli#run} and exits with whatever code it returns. */
     public static void main(String[] args) {
         System.exit(Cli.run(args, System.out, System.err));
     }

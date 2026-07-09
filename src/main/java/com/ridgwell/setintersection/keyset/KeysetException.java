@@ -9,6 +9,7 @@ public final class KeysetException extends IOException {
         super(message);
     }
 
+    /** For wrapping a lower-level failure (e.g. the file couldn't be opened) with more context. */
     public KeysetException(String message, Throwable cause) {
         super(message, cause);
     }

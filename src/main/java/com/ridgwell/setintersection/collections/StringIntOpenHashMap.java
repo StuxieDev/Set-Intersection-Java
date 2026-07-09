@@ -40,10 +40,12 @@ public final class StringIntOpenHashMap {
     private int size;
     private int tombstones;
 
+    /** Starts at the default capacity. */
     public StringIntOpenHashMap() {
         this(DEFAULT_INITIAL_CAPACITY);
     }
 
+    /** Rounds {@code initialCapacity} up to a power of two so probing can use a bitmask. */
     public StringIntOpenHashMap(int initialCapacity) {
         this.capacity = nextPowerOfTwo(Math.max(initialCapacity, 4));
         this.keys = new String[capacity];
@@ -140,6 +142,7 @@ public final class StringIntOpenHashMap {
         }
     }
 
+    /** The linear probe itself - shared by every read (getOrDefault, containsKey, remove). */
     private int locate(String key) {
         int mask = capacity - 1;
         int index = spread(key.hashCode()) & mask;
@@ -157,6 +160,7 @@ public final class StringIntOpenHashMap {
         }
     }
 
+    /** Called before every insert - grows if adding one more entry would push past the load factor. */
     private void growIfNeeded() {
         if (size + tombstones + 1 > capacity * MAX_LOAD_FACTOR) {
             resize(capacity * 2);
@@ -203,6 +207,7 @@ public final class StringIntOpenHashMap {
         size++;
     }
 
+    /** Smallest power of two that's >= n. */
     private static int nextPowerOfTwo(int n) {
         int p = 1;
         while (p < n) {

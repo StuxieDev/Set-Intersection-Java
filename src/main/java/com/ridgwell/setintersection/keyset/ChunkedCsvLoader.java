@@ -165,6 +165,8 @@ final class ChunkedCsvLoader {
             return b;
         }
 
+        // Same idea as read() above, but capping how much of the buffer we ask the
+        // delegate to fill so a read spanning the range's end can't pull in the next chunk's bytes.
         @Override
         public int read(byte[] buf, int off, int len) throws IOException {
             if (remaining <= 0) {

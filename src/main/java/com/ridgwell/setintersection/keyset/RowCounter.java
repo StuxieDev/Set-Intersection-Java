@@ -15,6 +15,7 @@ final class RowCounter {
     // Used only to label error messages with something identifying the file being read.
     private final String sourceLabel;
 
+    /** {@code keyColumnIndices} is already resolved - by this point columns are indices, not names or specs. */
     RowCounter(int[] keyColumnIndices, String sourceLabel) {
         this.keyColumnIndices = keyColumnIndices;
         this.sourceLabel = sourceLabel;

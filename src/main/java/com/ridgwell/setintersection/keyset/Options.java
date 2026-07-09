@@ -14,6 +14,8 @@ import java.util.List;
  */
 public record Options(boolean hasHeader, List<String> columns, char delimiter) {
 
+    // Compact constructor: validates columns and makes a defensive immutable copy, since
+    // this is called from the CLI with a caller-owned mutable List.
     public Options {
         if (columns == null || columns.isEmpty()) {
             throw new IllegalArgumentException("columns must not be empty");
@@ -21,6 +23,7 @@ public record Options(boolean hasHeader, List<String> columns, char delimiter) {
         columns = List.copyOf(columns);
     }
 
+    /** Convenience for the common case of one key column, so callers don't have to wrap it in a List themselves. */
     public static Options singleColumn(boolean hasHeader, String column, char delimiter) {
         return new Options(hasHeader, List.of(column), delimiter);
     }
