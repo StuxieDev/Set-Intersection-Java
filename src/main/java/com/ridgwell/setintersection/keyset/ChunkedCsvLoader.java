@@ -75,8 +75,14 @@ final class ChunkedCsvLoader {
         return merged;
     }
 
-    /** Blocks for one chunk's result, unwrapping the checked exception a virtual-thread task's failure gets wrapped in. */
-    private static Counts await(Future<Counts> future) throws IOException {
+    /**
+     * Blocks for one chunk's result, unwrapping the checked exception a virtual-thread
+     * task's failure gets wrapped in. Package-private rather than {@code private} so
+     * {@code ChunkedCsvLoaderAwaitTest} can drive both catch branches directly with a
+     * hand-built {@code Future}, instead of contorting a real chunked load into failing in
+     * exactly the right way.
+     */
+    static Counts await(Future<Counts> future) throws IOException {
         try {
             return future.get();
         } catch (ExecutionException e) {
@@ -153,8 +159,17 @@ final class ChunkedCsvLoader {
         }
     }
 
-    /** Limits a delegate stream to at most {@code limit} more bytes, so a chunk task never reads past its range. */
-    private static final class BoundedInputStream extends InputStream {
+    /**
+     * Limits a delegate stream to at most {@code limit} more bytes, so a chunk task never
+     * reads past its range. Package-private rather than {@code private} purely so
+     * {@code BoundedInputStreamTest} can drive it directly - both overrides matter (the
+     * single-byte one is the contractually required override every {@code InputStream}
+     * must have; the bulk one is a performance override for when something upstream, like
+     * {@code BufferedInputStream}, refills its own buffer in bulk) and only the second one
+     * gets exercised by an ordinary chunked load, since a {@code BufferedInputStream}
+     * always calls the bulk form to refill.
+     */
+    static final class BoundedInputStream extends InputStream {
         private final InputStream delegate;
         private long remaining;
 

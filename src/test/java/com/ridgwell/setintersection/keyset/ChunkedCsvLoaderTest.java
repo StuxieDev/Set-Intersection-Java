@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -75,6 +76,53 @@ class ChunkedCsvLoaderTest {
 
         assertCountsEqual(serial, chunked);
         assertEquals(1, chunked.frequencyOf("multi\nline\nquoted\nvalue"));
+    }
+
+    @Test
+    void quotedHeaderNamesAreHandledWhenFindingWhereTheHeaderEnds(@TempDir Path dir) throws IOException {
+        assumeTrue(Runtime.getRuntime().availableProcessors() > 1, "chunking needs more than one core");
+
+        Path path = dir.resolve("quoted-header.csv");
+        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+            writer.write("\"a\",\"b\"\n");
+            Random random = new Random(11);
+            for (int i = 0; i < 60_000; i++) {
+                writer.write("part-" + random.nextInt(500) + ",part2-" + random.nextInt(37) + "\n");
+            }
+        }
+
+        RegularFileSource source = new RegularFileSource(path);
+        Options opts = new Options(true, List.of("a"), ',');
+
+        Counts serial = KeysetLoader.loadSerially(source, opts);
+        Counts chunked = ChunkedCsvLoader.load(source, opts);
+
+        assertCountsEqual(serial, chunked);
+    }
+
+    @Test
+    void headerWithNoTrailingNewlineAndNoDataRowsIsAnEmptyResult(@TempDir Path dir) throws IOException {
+        Path path = dir.resolve("header-only.csv");
+        Files.writeString(path, "a,b");
+
+        RegularFileSource source = new RegularFileSource(path);
+        Options opts = new Options(true, List.of("a"), ',');
+
+        Counts counts = ChunkedCsvLoader.load(source, opts);
+
+        assertEquals(0, counts.total());
+        assertEquals(0, counts.distinct());
+    }
+
+    @Test
+    void emptyFileWithHeaderExpectedIsAnError(@TempDir Path dir) throws IOException {
+        Path path = dir.resolve("empty.csv");
+        Files.writeString(path, "");
+
+        RegularFileSource source = new RegularFileSource(path);
+        Options opts = new Options(true, List.of("a"), ',');
+
+        assertThrows(KeysetException.class, () -> ChunkedCsvLoader.load(source, opts));
     }
 
     private static void writePaddedCsv(Path path, boolean withHeader, int rowCount, int distinctKeys) throws IOException {
