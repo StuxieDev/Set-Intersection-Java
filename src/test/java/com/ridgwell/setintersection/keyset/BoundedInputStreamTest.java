@@ -67,9 +67,8 @@ class BoundedInputStreamTest {
             }
         };
 
-        try (var bounded = new ChunkedCsvLoader.BoundedInputStream(delegate, 5)) {
-            // closing happens via try-with-resources below
-        }
+        var bounded = new ChunkedCsvLoader.BoundedInputStream(delegate, 5);
+        bounded.close();
 
         assertEquals(true, closed[0]);
     }
