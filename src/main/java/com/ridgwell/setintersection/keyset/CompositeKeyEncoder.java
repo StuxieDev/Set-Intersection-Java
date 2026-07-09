@@ -3,11 +3,11 @@ package com.ridgwell.setintersection.keyset;
 /**
  * Combines several field values into one key string for composite (multi-column) keys.
  *
- * <p>Naive concatenation is ambiguous - {@code ("AB", "C")} and {@code ("A", "BC")} would
- * both produce {@code "ABC"}. Instead each part is length-prefixed: {@code ("AB", "C")}
- * becomes {@code "2:AB1:C"}. A reader always knows exactly how many characters to consume
- * next, so this is provably collision-free for any input - no separator character needs
- * to be reserved or escaped.
+ * <p>Just concatenating the parts would be ambiguous - {@code ("AB", "C")} and
+ * {@code ("A", "BC")} both give {@code "ABC"}. So each part gets length-prefixed instead:
+ * {@code ("AB", "C")} becomes {@code "2:AB1:C"}. That tells a reader exactly how many
+ * characters belong to each part, so two different inputs can never collide - and there's
+ * no separator character to escape if a field happens to contain one.
  */
 final class CompositeKeyEncoder {
 

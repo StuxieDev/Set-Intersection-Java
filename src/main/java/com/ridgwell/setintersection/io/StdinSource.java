@@ -12,8 +12,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class StdinSource implements InputSource {
 
+    // Tracks whether this instance's stream has already been handed out. Guards against
+    // opening System.in twice (which would silently hand back an already-exhausted stream).
     private final AtomicBoolean consumed = new AtomicBoolean(false);
 
+    /** Returns {@code System.in} the first time it's called; throws on every call after that. */
     @Override
     public InputStream openStream() {
         if (!consumed.compareAndSet(false, true)) {
@@ -22,6 +25,7 @@ public final class StdinSource implements InputSource {
         return System.in;
     }
 
+    /** A fixed placeholder label, since stdin has no path of its own. */
     @Override
     public String displayPath() {
         return "<stdin>";

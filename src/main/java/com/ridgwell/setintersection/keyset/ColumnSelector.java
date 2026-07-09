@@ -10,6 +10,8 @@ final class ColumnSelector {
     }
 
     /**
+     * Resolves every spec in {@code specs} (in order) to a concrete column index.
+     *
      * @param headerRow the parsed header row, required (non-null) when {@code hasHeader}
      *                   is true; ignored otherwise
      */
@@ -21,10 +23,13 @@ final class ColumnSelector {
         return indices;
     }
 
+    /** Resolves a single spec: a numeric index if it parses as one, otherwise a header-name lookup. */
     private static int resolveOne(String spec, boolean hasHeader, String[] headerRow) throws KeysetException {
         try {
             return Integer.parseInt(spec);
         } catch (NumberFormatException notNumeric) {
+            // Not numeric - the only other way to resolve a column is by header name, which
+            // requires there to actually be a header row to look it up in.
             if (!hasHeader) {
                 throw new KeysetException(
                         "column '" + spec + "' must be a numeric index when -header is not set");
@@ -38,6 +43,7 @@ final class ColumnSelector {
         }
     }
 
+    /** Linear scan for {@code name} in {@code header}; returns -1 if absent. */
     private static int indexOf(String[] header, String name) {
         for (int i = 0; i < header.length; i++) {
             if (header[i].equals(name)) {

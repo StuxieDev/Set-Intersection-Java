@@ -20,18 +20,21 @@ final class ArgParser {
     private final Map<String, String> stringValues = new HashMap<>();
     private final Map<String, Boolean> boolValues = new HashMap<>();
 
+    /** Registers a string-valued flag; returns {@code this} so registrations can be chained. */
     ArgParser stringFlag(String name, String defaultValue, String help) {
         specs.put(name, new FlagSpec(name, FlagType.STRING, defaultValue, help));
         stringValues.put(name, defaultValue);
         return this;
     }
 
+    /** Registers a boolean flag. */
     ArgParser boolFlag(String name, boolean defaultValue, String help) {
         specs.put(name, new FlagSpec(name, FlagType.BOOLEAN, String.valueOf(defaultValue), help));
         boolValues.put(name, defaultValue);
         return this;
     }
 
+    /** Walks {@code args} left to right, filling in {@code stringValues}/{@code boolValues} as it goes. */
     void parse(String[] args) throws CliUsageException {
         int i = 0;
         while (i < args.length) {
@@ -54,6 +57,8 @@ final class ArgParser {
             }
 
             if (spec.type() == FlagType.BOOLEAN) {
+                // A bare "-header" means true; it never eats the next token as its value,
+                // which matters so it doesn't accidentally swallow a following file path.
                 boolValues.put(name, inlineValue == null || Boolean.parseBoolean(inlineValue));
                 continue;
             }
@@ -69,6 +74,7 @@ final class ArgParser {
         }
     }
 
+    /** Strips a leading {@code -}/{@code --} off a token, or complains if there isn't one to strip. */
     private static String stripLeadingDashes(String token) throws CliUsageException {
         if (token.startsWith("--")) {
             return token.substring(2);
@@ -87,6 +93,7 @@ final class ArgParser {
         return boolValues.get(name);
     }
 
+    /** Builds the usage text shown on `-help` and on a parse/validation error. */
     String usage(String programName) {
         StringBuilder sb = new StringBuilder();
         sb.append("Usage: ").append(programName)
@@ -98,6 +105,7 @@ final class ArgParser {
         return sb.toString();
     }
 
+    /** Quotes a string flag's default for display; a boolean's default (true/false) needs no quoting. */
     private static String quote(FlagSpec spec) {
         return spec.type() == FlagType.STRING ? "\"" + spec.defaultValue() + "\"" : spec.defaultValue();
     }

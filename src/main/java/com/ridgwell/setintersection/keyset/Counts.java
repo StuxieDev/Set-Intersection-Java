@@ -10,10 +10,12 @@ public final class Counts {
     private final StringIntOpenHashMap freq = new StringIntOpenHashMap();
     private long total;
 
+    /** Package-private: instances are only ever created by the loaders in this package. */
     Counts(String path) {
         this.path = path;
     }
 
+    /** The path (or {@code <stdin>}) this file's counts were loaded from. */
     public String path() {
         return path;
     }
@@ -23,6 +25,7 @@ public final class Counts {
         return total;
     }
 
+    /** Number of distinct keys read. */
     public int distinct() {
         return freq.size();
     }

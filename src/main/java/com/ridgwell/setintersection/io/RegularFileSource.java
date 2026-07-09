@@ -13,11 +13,13 @@ import java.nio.file.Path;
  */
 public record RegularFileSource(Path path) implements InputSource {
 
+    /** Opens a buffered byte stream over the whole file, starting at offset 0. */
     @Override
     public InputStream openStream() throws IOException {
         return new BufferedInputStream(Files.newInputStream(path));
     }
 
+    /** The file's own path, as given on the command line. */
     @Override
     public String displayPath() {
         return path.toString();

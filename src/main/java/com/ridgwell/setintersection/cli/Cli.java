@@ -25,6 +25,7 @@ public final class Cli {
     private Cli() {
     }
 
+    /** Parses {@code args}, runs the comparison, and writes the report to {@code out}/{@code err}. Returns the process exit code. */
     public static int run(String[] args, PrintStream out, PrintStream err) {
         ArgParser parser = buildParser();
         try {
@@ -49,12 +50,14 @@ public final class Cli {
         }
     }
 
+    /** Prints the error plus usage to stderr and returns exit code 1. */
     private static int usageError(PrintStream err, ArgParser parser, CliUsageException e) {
         err.println("error: " + e.getMessage());
         err.print(parser.usage(PROGRAM_NAME));
         return 1;
     }
 
+    /** The actual comparison: validate flags, build the two sides' options, load, compare, print. */
     private static void runWithOptions(CliOptions cli, PrintStream out) throws CliUsageException, IOException {
         if (isBlank(cli.file1()) || isBlank(cli.file2())) {
             throw new CliUsageException("-file1 and -file2 are required");
@@ -89,10 +92,12 @@ public final class Cli {
         return s == null || s.isEmpty();
     }
 
+    /** Used for the per-file `-column1`/`-delimiter1` etc. overrides: falls back to the shared flag when the override is unset. */
     private static String orDefault(String override, String fallback) {
         return isBlank(override) ? fallback : override;
     }
 
+    /** Splits a `-column`/`-column1`/`-column2` value on commas for composite keys. */
     private static List<String> splitColumns(String spec) throws CliUsageException {
         String[] parts = spec.split(",");
         List<String> columns = new ArrayList<>(parts.length);
@@ -105,6 +110,7 @@ public final class Cli {
         return columns;
     }
 
+    /** Registers every flag this CLI accepts, with its default and help text. */
     private static ArgParser buildParser() {
         return new ArgParser()
                 .stringFlag("file1", "", "path to the first CSV file (required; \"-\" for stdin)")
@@ -121,6 +127,7 @@ public final class Cli {
                 .boolFlag("h", false, "alias for -help");
     }
 
+    /** Pulls the parsed values out of the generic {@link ArgParser} into a typed {@link CliOptions}. */
     private static CliOptions toCliOptions(ArgParser parser) {
         return new CliOptions(
                 parser.getString("file1"),

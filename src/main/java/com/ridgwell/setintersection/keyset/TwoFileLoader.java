@@ -9,11 +9,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Loads two files at the same time, each on its own virtual thread, so wall-clock time is
- * close to {@code max(load1, load2)} instead of the sum. Each file independently decides
- * serial vs. chunked loading (see {@link KeysetLoader}), so a chunked load nests virtual
- * threads under this one without any special handling here - that's the point of using
- * virtual threads for both levels.
+ * Loads two files at once, each on its own virtual thread, so wall-clock time is roughly
+ * {@code max(load1, load2)} rather than the sum. Each file makes its own call on whether
+ * to chunk (see {@link KeysetLoader}) with no coordination needed here - a chunked load
+ * just spins up more virtual threads underneath, which is cheap enough not to matter.
  */
 public final class TwoFileLoader {
 
@@ -59,6 +58,7 @@ public final class TwoFileLoader {
         }
     }
 
+    /** A task's real failure ends up wrapped in ExecutionException - this pulls the original IOException back out. */
     private static IOException unwrap(ExecutionException e) {
         Throwable cause = e.getCause();
         return cause instanceof IOException io ? io : new IOException(cause);

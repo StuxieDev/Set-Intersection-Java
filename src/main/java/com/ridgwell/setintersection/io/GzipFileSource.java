@@ -14,11 +14,13 @@ import java.util.zip.GZIPInputStream;
  */
 public record GzipFileSource(Path path) implements InputSource {
 
+    /** Opens the file and wraps it in a {@link GZIPInputStream} so callers see decompressed bytes. */
     @Override
     public InputStream openStream() throws IOException {
         return new GZIPInputStream(new BufferedInputStream(Files.newInputStream(path)));
     }
 
+    /** The compressed file's own path, as given on the command line. */
     @Override
     public String displayPath() {
         return path.toString();

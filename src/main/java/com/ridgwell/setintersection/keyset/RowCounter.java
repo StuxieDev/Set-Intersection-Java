@@ -9,7 +9,10 @@ import com.ridgwell.setintersection.csv.CsvReader;
  */
 final class RowCounter {
 
+    // Resolved column index for each key spec, in order - one entry for a plain key,
+    // more than one for a composite key.
     private final int[] keyColumnIndices;
+    // Used only to label error messages with something identifying the file being read.
     private final String sourceLabel;
 
     RowCounter(int[] keyColumnIndices, String sourceLabel) {
@@ -17,10 +20,12 @@ final class RowCounter {
         this.sourceLabel = sourceLabel;
     }
 
+    /** Extracts the key from the reader's current record (applying composite encoding if needed) and records it in {@code counts}. */
     void consumeRow(CsvReader reader, Counts counts) throws KeysetException {
         int fieldCount = reader.fieldCount();
         String key;
         if (keyColumnIndices.length == 1) {
+            // Ordinary single-column key - use the field value directly, with no composite encoding.
             key = fieldAt(reader, keyColumnIndices[0], fieldCount);
         } else {
             String[] parts = new String[keyColumnIndices.length];
@@ -32,6 +37,7 @@ final class RowCounter {
         counts.recordKey(key);
     }
 
+    /** Returns field {@code index} of the current record, or throws if the row doesn't have that many fields. */
     private String fieldAt(CsvReader reader, int index, int fieldCount) throws KeysetException {
         if (index < 0 || index >= fieldCount) {
             throw new KeysetException(sourceLabel + ": record " + reader.recordNumber()

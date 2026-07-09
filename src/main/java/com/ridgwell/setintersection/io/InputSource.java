@@ -13,6 +13,7 @@ import java.io.InputStream;
  */
 public sealed interface InputSource permits RegularFileSource, GzipFileSource, StdinSource {
 
+    /** Opens a fresh byte stream over this source's content. */
     InputStream openStream() throws IOException;
 
     /** A human-readable label for error messages and report output. */

@@ -3,33 +3,36 @@ package com.ridgwell.setintersection.collections;
 import java.util.Objects;
 
 /**
- * A hand-rolled {@code String -> int} map used to count key frequencies, in place of
- * {@code java.util.HashMap<String, Integer>}.
+ * A {@code String -> int} map for counting key frequencies, written by hand instead of
+ * using {@code java.util.HashMap<String, Integer>}.
  *
- * <p>Implementation: open addressing with linear probing over three parallel arrays
- * (keys, values, per-slot state) rather than a bucket/node structure, so lookups and
- * increments never allocate and never box the count into an {@code Integer}. Slot state
- * is one of {@link #EMPTY}, {@link #OCCUPIED}, or {@link #TOMBSTONE} (a deleted slot that
- * must stay "not empty" for probing correctness but doesn't hold a live entry).
+ * <p>It's open addressing with linear probing over three parallel arrays (keys, values,
+ * and a per-slot state byte) instead of a bucket/node structure, so counting never
+ * allocates and never boxes anything into an {@code Integer}. A slot is EMPTY, OCCUPIED,
+ * or TOMBSTONE - tombstones are deleted entries that still need to block probes from
+ * stopping early, even though nothing lives there anymore.
  *
- * <p>Capacity is always a power of two so probing can use a bitmask instead of a modulo.
- * {@link String#hashCode()} is run through a Murmur3-style finalizer before masking,
- * because {@code String.hashCode()} alone spreads its low bits poorly for structured
- * inputs (e.g. runs of digits, as in the UDPRN-style keys this tool was written for) -
- * masked directly, that weakness would cluster entries instead of spreading them evenly.
+ * <p>Capacity is always a power of two so probing can mask instead of doing a modulo.
+ * {@code String.hashCode()} gets run through a Murmur3-style finalizer first, because on
+ * its own it spreads badly for keys that are mostly digits - which is exactly what the
+ * UDPRN keys this was built for look like. Without that step they'd cluster instead of
+ * spreading evenly across the table.
  *
- * <p>Not thread-safe: each concurrent CSV chunk in this tool builds its own instance,
- * which are merged afterwards, so no instance is ever written from more than one thread.
+ * <p>Not thread-safe, but doesn't need to be: each parallel CSV chunk builds its own
+ * instance and they get merged afterwards, so nothing here is ever written from two
+ * threads at once.
  */
 public final class StringIntOpenHashMap {
 
     private static final int DEFAULT_INITIAL_CAPACITY = 16;
+    // Once (live entries + tombstones) crosses this fraction of capacity, grow.
     private static final double MAX_LOAD_FACTOR = 0.7;
 
     private static final byte EMPTY = 0;
     private static final byte OCCUPIED = 1;
     private static final byte TOMBSTONE = 2;
 
+    // keys[i]/values[i]/states[i] together are slot i.
     private String[] keys;
     private int[] values;
     private byte[] states;
@@ -57,7 +60,7 @@ public final class StringIntOpenHashMap {
         return size == 0;
     }
 
-    /** Current table size in slots. Exposed for tests that assert on resize behaviour. */
+    /** Current table size in slots - mostly useful for tests asserting on resize behaviour. */
     public int capacity() {
         return capacity;
     }
@@ -71,18 +74,21 @@ public final class StringIntOpenHashMap {
         return index >= 0 ? values[index] : defaultValue;
     }
 
-    /** Equivalent to {@code merge(key, 1)} - the hot path used while counting CSV rows. */
+    /** Same as {@code merge(key, 1)} - the hot path for counting CSV rows. */
     public void increment(String key) {
         merge(key, 1);
     }
 
-    /** Adds {@code delta} to the count for {@code key}, inserting it at {@code delta} if absent. */
+    /** Adds {@code delta} to {@code key}'s count, inserting it fresh if it isn't there yet. */
     public void merge(String key, int delta) {
         Objects.requireNonNull(key, "key");
+        // Grow before probing so there's always room for an insert without resizing mid-scan.
         growIfNeeded();
 
         int mask = capacity - 1;
         int index = spread(key.hashCode()) & mask;
+        // If we end up inserting rather than updating, prefer the first tombstone we
+        // passed over the eventual empty slot - keeps the probe chain for this bucket short.
         int firstTombstone = -1;
 
         while (true) {
@@ -109,12 +115,14 @@ public final class StringIntOpenHashMap {
         }
     }
 
-    /** Removes {@code key} if present. Not used on the CSV-loading hot path; exercised by tests. */
+    /** Removes {@code key} if it's there. Not on the loading hot path, just here for completeness (and tests). */
     public boolean remove(String key) {
         int index = locate(key);
         if (index < 0) {
             return false;
         }
+        // Has to become a TOMBSTONE, not EMPTY - an EMPTY slot would cut off probes for
+        // other keys that hashed the same way and got pushed past this one.
         states[index] = TOMBSTONE;
         keys[index] = null;
         values[index] = 0;
@@ -123,7 +131,7 @@ public final class StringIntOpenHashMap {
         return true;
     }
 
-    /** Visits every live entry with no per-entry allocation and no boxed {@code Integer}. */
+    /** Visits every live entry - no boxed {@code Integer}, no {@code Map.Entry} allocated per entry. */
     public void forEach(EntryConsumer consumer) {
         for (int i = 0; i < capacity; i++) {
             if (states[i] == OCCUPIED) {
@@ -132,13 +140,14 @@ public final class StringIntOpenHashMap {
         }
     }
 
-    /** Returns the slot index of {@code key} if present (occupied and equal), else -1. */
     private int locate(String key) {
         int mask = capacity - 1;
         int index = spread(key.hashCode()) & mask;
         while (true) {
             byte state = states[index];
             if (state == EMPTY) {
+                // If key were in the table, it (or a tombstone in its place) would have
+                // shown up before we ever reached an empty slot.
                 return -1;
             }
             if (state == OCCUPIED && keys[index].equals(key)) {
@@ -155,9 +164,9 @@ public final class StringIntOpenHashMap {
     }
 
     /**
-     * Rebuilds the table at {@code newCapacity}, re-inserting only live entries so
-     * tombstones accumulated since the last resize are dropped for free. Rehashing cost
-     * is O(size), not O(capacity), regardless of how many tombstones existed before.
+     * Rebuilds at {@code newCapacity}, carrying over only the live entries - tombstones
+     * just get dropped, which is how their cost gets reclaimed. Cost is O(size), not
+     * O(capacity), no matter how many tombstones had piled up beforehand.
      */
     private void resize(int newCapacity) {
         String[] oldKeys = keys;
@@ -179,10 +188,12 @@ public final class StringIntOpenHashMap {
         }
     }
 
-    /** Inserts a key known to be unique into a freshly-sized, tombstone-free table. */
+    /** Inserts a key already known to be unique into a fresh, tombstone-free table. */
     private void insertFreshDuringResize(String key, int value) {
         int mask = capacity - 1;
         int index = spread(key.hashCode()) & mask;
+        // No need to check for a match - every key coming from the old table is already
+        // unique, so the first empty slot we hit is the right one.
         while (states[index] != EMPTY) {
             index = (index + 1) & mask;
         }
@@ -200,7 +211,7 @@ public final class StringIntOpenHashMap {
         return p;
     }
 
-    /** Murmur3 fmix32 finalizer, used to spread {@link String#hashCode()} before masking. */
+    /** Murmur3's fmix32 finalizer - spreads the hash before it gets masked down to a table index. */
     private static int spread(int h) {
         h ^= (h >>> 16);
         h *= 0x85EBCA6B;

@@ -33,6 +33,7 @@ public final class KeysetLoader {
         };
     }
 
+    /** Whether this file is worth the overhead of splitting into chunks - only matters for a regular, seekable file. */
     private static boolean isLargeEnoughToChunk(RegularFileSource source) {
         if (Runtime.getRuntime().availableProcessors() <= 1) {
             return false;
@@ -45,6 +46,7 @@ public final class KeysetLoader {
         }
     }
 
+    /** One pass, top to bottom - the path taken by anything that isn't a large plain file. */
     static Counts loadSerially(InputSource source, Options opts) throws IOException {
         InputStream raw;
         try {
@@ -73,6 +75,7 @@ public final class KeysetLoader {
         }
     }
 
+    /** Snapshots the header row's fields before the reader moves on to data rows. */
     private static String[] copyFields(CsvReader reader) {
         String[] fields = new String[reader.fieldCount()];
         for (int i = 0; i < fields.length; i++) {

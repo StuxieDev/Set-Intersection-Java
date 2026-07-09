@@ -16,12 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Cross-checks the parallel chunked path against the ordinary serial path on the same
- * file - the core correctness property for the whole chunking feature. Calls
- * {@link ChunkedCsvLoader#load} directly (package-private) so these tests exercise
- * multiple real chunks without needing a file past {@code KeysetLoader}'s 32 MiB
- * auto-chunking threshold; test files here are sized past the loader's own
- * {@code MIN_CHUNK_BYTES} instead, which is enough to get more than one chunk.
+ * The main thing that matters for chunking: parse the same file chunked and serial, and
+ * make sure they agree. Calls {@link ChunkedCsvLoader#load} directly so the test files
+ * only need to clear the loader's internal {@code MIN_CHUNK_BYTES} (a few MB), not
+ * {@code KeysetLoader}'s real 32 MiB auto-chunking threshold.
  */
 class ChunkedCsvLoaderTest {
 

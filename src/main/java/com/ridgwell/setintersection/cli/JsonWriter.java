@@ -15,6 +15,7 @@ final class JsonWriter {
     private JsonWriter() {
     }
 
+    /** Writes the fixed {@code {files, distinct_overlap, total_overlap}} shape, 2-space indented. */
     static void write(PrintStream out, Counts c1, Counts c2, Overlap overlap) {
         StringBuilder json = new StringBuilder();
         json.append("{\n");
@@ -31,6 +32,7 @@ final class JsonWriter {
         out.print(json);
     }
 
+    /** One entry in the "files" array; {@code hasMore} decides whether a trailing comma is needed. */
     private static void appendFile(StringBuilder json, Counts c, boolean hasMore) {
         json.append("    {\n");
         json.append("      \"path\": \"").append(escape(c.path())).append("\",\n");

@@ -33,11 +33,14 @@ final class ChunkedCsvLoader {
     private ChunkedCsvLoader() {
     }
 
+    /** Reads the header once (if any), plans the chunk ranges, parses them in parallel, and merges the results. */
     static Counts load(RegularFileSource source, Options opts) throws IOException {
         Path path = source.path();
         String label = source.displayPath();
         long fileSize = Files.size(path);
 
+        // The header, if there is one, gets read up front and removed from consideration -
+        // everything past dataStart is plain data, so no chunk task has to special-case row 1.
         String[] header = null;
         long dataStart = 0;
         if (opts.hasHeader()) {
@@ -72,6 +75,7 @@ final class ChunkedCsvLoader {
         return merged;
     }
 
+    /** Blocks for one chunk's result, unwrapping the checked exception a virtual-thread task's failure gets wrapped in. */
     private static Counts await(Future<Counts> future) throws IOException {
         try {
             return future.get();
@@ -87,6 +91,7 @@ final class ChunkedCsvLoader {
         }
     }
 
+    /** One chunk's work: parse its byte range with an ordinary {@link CsvReader} into a local {@link Counts}. */
     private static Counts parseRange(Path path, ChunkRange range, int[] indices, String label, char delimiter) throws IOException {
         Counts counts = new Counts(label);
         RowCounter rowCounter = new RowCounter(indices, label);
@@ -98,6 +103,7 @@ final class ChunkedCsvLoader {
         return counts;
     }
 
+    /** Opens the file at {@code range.start()} and caps reads at {@code range.end()}, so this chunk can't wander into the next one. */
     private static InputStream boundedChannelStream(Path path, ChunkRange range) throws IOException {
         FileChannel channel = FileChannel.open(path, StandardOpenOption.READ);
         channel.position(range.start());
@@ -105,6 +111,7 @@ final class ChunkedCsvLoader {
         return new BufferedInputStream(new BoundedInputStream(base, range.end() - range.start()));
     }
 
+    /** Reads just the header row, for resolving column names before any chunk starts parsing. */
     private static String[] readHeaderFields(Path path, char delimiter, String label) throws IOException {
         try (CsvReader reader = new CsvReader(new BufferedInputStream(Files.newInputStream(path)), delimiter, label)) {
             if (!reader.nextRecord()) {

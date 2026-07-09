@@ -10,21 +10,21 @@ import java.util.List;
 
 /**
  * Splits {@code [dataStartOffset, fileSize)} of a file into byte ranges that are safe to
- * parse independently in parallel - each range starts exactly on a real CSV record
+ * parse independently in parallel - each one starts exactly on a real CSV record
  * boundary, never in the middle of a quoted field.
  *
- * <p>A boundary can't be found by looking only at the bytes immediately around a target
- * offset: whether that offset sits inside a quoted field depends on everything read since
- * the last known record boundary. So this makes one sequential pass from
- * {@code dataStartOffset} - a position already known to be a genuine record start, since
- * it's either the very start of the data or the offset right after a header row read by
- * {@link ChunkedCsvLoader} - tracking a single "inside a quoted field" flag.
+ * <p>You can't find a boundary by just looking at the bytes around a target offset,
+ * because whether that offset is inside a quoted field depends on everything read since
+ * the last known boundary. So this does one sequential pass starting from
+ * {@code dataStartOffset}, which is always a genuine record start (either the very
+ * beginning of the data, or the offset right after a header row), tracking a single
+ * "am I inside a quoted field right now" flag as it goes.
  *
- * <p>That flag has a pleasant invariant for well-formed CSV: a quoted field always
- * contains an even number of quote characters before its closing quote (the opening quote,
- * plus zero or more escaped {@code ""} pairs), so simply counting quote characters seen so
- * far and testing the count's parity exactly tracks "inside a quoted field" - no need to
- * look ahead for a doubled quote to distinguish "escaped" from "closing".
+ * <p>That flag turns out to be easy to track: a quoted field always has an even number of
+ * quote characters up to and including its closing quote (one for the open, an even number
+ * more for any escaped {@code ""} pairs, one for the close). So just counting quote
+ * characters seen so far and checking whether that count is odd or even tells you whether
+ * you're inside a quoted field - no lookahead needed to tell "escaped" apart from "closing".
  */
 final class ChunkPlanner {
 
@@ -58,6 +58,7 @@ final class ChunkPlanner {
         return ranges;
     }
 
+    /** The quote-aware scan described above - one pass, picking up each target boundary as it's crossed. */
     private static long[] findBoundaries(Path path, long dataStartOffset, long fileSize, int chunkCount) throws IOException {
         long dataLength = fileSize - dataStartOffset;
         long[] targets = new long[chunkCount - 1];
@@ -89,6 +90,7 @@ final class ChunkPlanner {
         return boundaries;
     }
 
+    /** {@code InputStream.skip} is allowed to skip fewer bytes than asked, so this keeps retrying until {@code n} bytes are gone. */
     private static void skipFully(InputStream in, long n) throws IOException {
         while (n > 0) {
             long skipped = in.skip(n);
