@@ -1,6 +1,5 @@
 package com.ridgwell.setintersection.keyset;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -58,6 +57,15 @@ final class ChunkPlanner {
         return ranges;
     }
 
+    // Read in chunks this size and scan each in memory, rather than one byte at a time
+    // through a stream. A first version of this used InputStream.read() per byte, which
+    // turned out to matter a lot: on an 87 MiB benchmark file, that single-byte version made
+    // the chunked path slower than just parsing serially, because this scan is a whole
+    // extra pass over the file stacked on top of the real parse. Reading in 64 KiB batches
+    // and scanning the array directly cut the scan down to a small fraction of the total
+    // parse time and turned that into a real speedup instead - see LoadBenchmark.
+    private static final int SCAN_BUFFER_SIZE = 64 * 1024;
+
     /** The quote-aware scan described above - one pass, picking up each target boundary as it's crossed. */
     private static long[] findBoundaries(Path path, long dataStartOffset, long fileSize, int chunkCount) throws IOException {
         long dataLength = fileSize - dataStartOffset;
@@ -70,17 +78,21 @@ final class ChunkPlanner {
         int nextTarget = 0;
         boolean insideQuotes = false;
 
-        try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
+        byte[] buffer = new byte[SCAN_BUFFER_SIZE];
+        try (InputStream in = Files.newInputStream(path)) {
             skipFully(in, dataStartOffset);
 
             long pos = dataStartOffset;
-            int b;
-            while (nextTarget < targets.length && (b = in.read()) != -1) {
-                pos++;
-                if (b == '"') {
-                    insideQuotes = !insideQuotes;
-                } else if (b == '\n' && !insideQuotes && pos >= targets[nextTarget]) {
-                    boundaries[nextTarget++] = pos;
+            int read;
+            while (nextTarget < targets.length && (read = in.read(buffer)) != -1) {
+                for (int i = 0; i < read && nextTarget < targets.length; i++) {
+                    byte b = buffer[i];
+                    pos++;
+                    if (b == '"') {
+                        insideQuotes = !insideQuotes;
+                    } else if (b == '\n' && !insideQuotes && pos >= targets[nextTarget]) {
+                        boundaries[nextTarget++] = pos;
+                    }
                 }
             }
             while (nextTarget < targets.length) {

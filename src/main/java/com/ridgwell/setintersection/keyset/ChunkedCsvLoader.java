@@ -125,18 +125,28 @@ final class ChunkedCsvLoader {
         }
     }
 
-    /** A raw byte scan (quote-aware, mirroring {@link ChunkPlanner}) for the offset right after the header's line ending. */
+    /**
+     * A raw byte scan (quote-aware, mirroring {@link ChunkPlanner}) for the offset right
+     * after the header's line ending. Only ever scans one line's worth of bytes, so unlike
+     * {@code ChunkPlanner}'s scan this was never actually the bottleneck - but it's read in
+     * the same bulk-buffer style anyway, since there's no good reason for the one scan that
+     * happens to be short today to look different from the one that wasn't.
+     */
     private static long findHeaderEndOffset(Path path) throws IOException {
-        try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
+        byte[] buffer = new byte[8 * 1024];
+        try (InputStream in = Files.newInputStream(path)) {
             long pos = 0;
             boolean insideQuotes = false;
-            int b;
-            while ((b = in.read()) != -1) {
-                pos++;
-                if (b == '"') {
-                    insideQuotes = !insideQuotes;
-                } else if (b == '\n' && !insideQuotes) {
-                    return pos;
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                for (int i = 0; i < read; i++) {
+                    byte b = buffer[i];
+                    pos++;
+                    if (b == '"') {
+                        insideQuotes = !insideQuotes;
+                    } else if (b == '\n' && !insideQuotes) {
+                        return pos;
+                    }
                 }
             }
             return pos;
