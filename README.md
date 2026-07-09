@@ -181,29 +181,49 @@ byte-identical, gzip, stdin, composite keys, the per-file overrides, and a threa
 interrupted mid-load (the interrupted flag has to survive the trip back through
 `Future.get()`, which is easy to accidentally swallow).
 
-Line coverage sits at ~94% (`mvn verify` generates the report at
+Line coverage sits at 99.3% (`mvn verify` generates the report at
 `target/site/jacoco/index.html`, and fails the build if it drops below 80%). That number
-isn't just asserted, either - I went looking at the per-class breakdown in the coverage
-report and found two classes sitting well below the rest: `DelimiterParser` at 40% (never
-had a dedicated test - only exercised incidentally through the CLI tests) and
-`ChunkedCsvLoader`'s private `BoundedInputStream` at 68% (its single-byte `read()`
-override turns out to be dead code under normal use - wrapping it in a
-`BufferedInputStream`, which `ChunkedCsvLoader` always does, means `BufferedInputStream`
-only ever calls the bulk `read(byte[], int, int)` form to refill its own buffer, so the
-single-byte override never actually runs unless something drives it directly). Both are
-package-private specifically so `DelimiterParserTest` and `BoundedInputStreamTest` could
-drive them directly rather than contort a CLI or chunked-load scenario into hitting a
-specific branch by accident.
+came from repeatedly reading the per-class breakdown rather than trusting a green test
+suite, and most of what it turned up were real behavioural gaps wearing a coverage-number
+disguise, not just missing lines:
 
-There's also `ChunkedCsvLoaderAwaitTest`, for the same reason as `TwoFileLoaderTest`'s
-interruption tests: `ChunkedCsvLoader.await` unwraps whatever a chunk's virtual-thread task
-failed with, and getting a real chunk to fail with a non-`IOException` cause on demand
-isn't practical, so `await` is package-private too and the test hands it a hand-built
-`Future` directly. `TwoFileLoader` had the identical gap - `loadBoth` has separate
-try/catch blocks for file1 and file2 that read alike, and only file1's was ever exercised,
-so `unwrap`'s non-`IOException` branch and file2's interrupted-and-only-file2-fails paths
-went uncovered until I checked for the same pattern there too and added the missing half.
-Both classes are at 100% line coverage now.
+- `DelimiterParser` and `ChunkedCsvLoader`'s private `BoundedInputStream` had no dedicated
+  tests at all - the latter's single-byte `read()` override is actually dead code under
+  normal use (wrapped in a `BufferedInputStream`, which always refills via the bulk
+  `read(byte[], int, int)` form instead), so nothing short of a direct test could ever
+  reach it. Both are package-private specifically so `DelimiterParserTest` and
+  `BoundedInputStreamTest` can drive them directly.
+- `ChunkedCsvLoader.await` and `TwoFileLoader`'s two near-identical try/catch blocks (one
+  per file) had the same shape of gap: file1's error/interrupt path was tested, file2's
+  wasn't, and the non-`IOException`-cause branch in both `unwrap` methods was never
+  exercised because manufacturing a real chunk failure with a non-`IOException` cause
+  isn't practical - `TwoFileLoader`'s test gets there more honestly, by passing a `null`
+  source and letting the resulting `NullPointerException` do the job.
+- The auto-chunk dispatch itself - `KeysetLoader.load`'s decision to route a large file to
+  `ChunkedCsvLoader` - had never been tested through its actual public entry point. Every
+  chunked-vs-serial test called `ChunkedCsvLoader.load` directly, which proves the
+  chunking logic works but not that anything real ever routes a file there. There's now a
+  test that generates a file past the 32 MiB threshold and calls `KeysetLoader.load`
+  itself.
+- `Cli.java` had never been tested with an actual missing input file (every existing
+  error-path test used a missing *flag*, not a missing *file*) or a genuinely unrecognized
+  flag reaching `Cli.run` rather than just `ArgParser` in isolation.
+- A handful of `CsvReader` edge cases had no coverage: a quoted field immediately followed
+  by EOF, one followed by `\r\n`, a blank line using `\r\n` instead of a bare `\n`, an
+  out-of-range `field()` index, and a record with more than eight columns (the field array
+  never had to grow).
+- `Compare`'s "walk whichever side has fewer distinct keys" swap never actually ran in any
+  existing test, because every one of them happened to compare two `Counts` with equal
+  distinct-key counts.
+
+Two gaps I looked at and decided not to force, for the same reason in both cases - forcing
+them would either require exposing internals with no other purpose or fabricating a
+scenario that doesn't correspond to anything a real caller would do, for a branch where
+every outcome is already correctness-equivalent: `StringIntOpenHashMap`'s tombstone-reuse
+slot selection (both the reused-slot and fresh-slot outcomes produce an equally correct
+map; forcing the reused one deterministically needs a hand-computed hash collision), and
+`KeysetLoader.isLargeEnoughToChunk`'s single-core branch (would need to fake
+`Runtime.availableProcessors()`, which isn't something the JDK lets you do from outside).
 
 ## CI and static analysis
 

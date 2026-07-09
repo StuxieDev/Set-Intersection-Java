@@ -26,6 +26,18 @@ class StringIntOpenHashMapTest {
     }
 
     @Test
+    void isEmptyReflectsWhetherAnyLiveEntriesExist() {
+        StringIntOpenHashMap map = new StringIntOpenHashMap();
+        assertTrue(map.isEmpty());
+
+        map.increment("a");
+        assertFalse(map.isEmpty());
+
+        map.remove("a");
+        assertTrue(map.isEmpty());
+    }
+
+    @Test
     void mergeAddsDelta() {
         StringIntOpenHashMap map = new StringIntOpenHashMap();
         map.merge("a", 5);

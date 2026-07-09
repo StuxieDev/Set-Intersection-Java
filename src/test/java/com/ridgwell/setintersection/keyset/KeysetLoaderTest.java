@@ -5,13 +5,17 @@ import com.ridgwell.setintersection.io.InputSourceFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** Direct ports of keyset_test.go's TestLoad_* cases. */
 class KeysetLoaderTest {
@@ -89,5 +93,56 @@ class KeysetLoaderTest {
 
         assertThrows(IOException.class,
                 () -> load(missing, Options.singleColumn(false, "0", ',')));
+    }
+
+    @Test
+    void loadSeriallyErrorsOnAnEmptyFileWhenAHeaderIsExpected(@TempDir Path dir) throws IOException {
+        Path path = dir.resolve("empty.csv");
+        Files.writeString(path, "");
+        InputSource source = InputSourceFactory.resolve(path.toString());
+
+        assertThrows(KeysetException.class,
+                () -> KeysetLoader.loadSerially(source, Options.singleColumn(true, "0", ',')));
+    }
+
+    /**
+     * Every other chunked-vs-serial test in this project calls {@link ChunkedCsvLoader#load}
+     * directly, which proves the chunking logic itself is correct but never actually proves
+     * that {@link KeysetLoader#load} - the real public entry point - routes a large file
+     * there in the first place. This generates a file past {@link KeysetLoader#CHUNK_THRESHOLD_BYTES}
+     * and goes through {@code load}, not {@code ChunkedCsvLoader.load}, specifically to
+     * exercise that dispatch decision.
+     */
+    @Test
+    void loadRoutesAFileOverTheChunkThresholdThroughThePublicEntryPoint(@TempDir Path dir) throws IOException {
+        assumeTrue(Runtime.getRuntime().availableProcessors() > 1, "chunking needs more than one core");
+
+        Path path = dir.resolve("large.csv");
+        writePastChunkThreshold(path);
+
+        InputSource source = InputSourceFactory.resolve(path.toString());
+        Options opts = Options.singleColumn(false, "0", ',');
+
+        Counts viaPublicEntryPoint = KeysetLoader.load(source, opts);
+        Counts knownSerial = KeysetLoader.loadSerially(source, opts);
+
+        assertEquals(knownSerial.total(), viaPublicEntryPoint.total());
+        assertEquals(knownSerial.distinct(), viaPublicEntryPoint.distinct());
+        knownSerial.forEachKey((key, count) ->
+                assertEquals(count, viaPublicEntryPoint.frequencyOf(key), "frequency of " + key));
+    }
+
+    private static void writePastChunkThreshold(Path path) throws IOException {
+        Random random = new Random(3);
+        String padding = "x".repeat(200);
+        long targetSize = KeysetLoader.CHUNK_THRESHOLD_BYTES + 4L * 1024 * 1024;
+        try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+            long written = 0;
+            while (written < targetSize) {
+                String line = "part-" + random.nextInt(1000) + "," + padding + "\n";
+                writer.write(line);
+                written += line.length();
+            }
+        }
     }
 }

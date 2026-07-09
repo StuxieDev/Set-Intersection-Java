@@ -3,7 +3,9 @@ package com.ridgwell.setintersection.keyset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -102,6 +104,61 @@ class ChunkPlannerTest {
         List<ChunkRange> ranges = ChunkPlanner.plan(path, 0, size, 1);
 
         assertEquals(List.of(new ChunkRange(0, size)), ranges);
+    }
+
+    /**
+     * A file with no newline anywhere has nowhere for any interior boundary to land, so
+     * every target the scan can't satisfy before EOF has to fall back to {@code fileSize} -
+     * collapsing what was asked for as several chunks into one. This is the safe
+     * degradation the class docs describe, exercised directly rather than as a side effect
+     * of some other scenario.
+     */
+    @Test
+    void ranOutOfFileBeforeFindingEveryTargetFallsBackToFileSize(@TempDir Path dir) throws IOException {
+        Path path = dir.resolve("no-newlines.csv");
+        Files.writeString(path, "abcdefghij");
+        long size = Files.size(path);
+
+        List<ChunkRange> ranges = ChunkPlanner.plan(path, 0, size, 3);
+
+        assertRangesReconstructWholeFileWithNoGapsOrOverlaps(ranges, 0, size);
+        assertEquals(1, ranges.size(), "with no newlines anywhere, the whole file must collapse into a single range");
+    }
+
+    @Test
+    void skipFullyFallsBackToSingleByteReadsWhenSkipReturnsZero() throws IOException {
+        byte[] data = "abcdefghij".getBytes(StandardCharsets.UTF_8);
+        InputStream zeroSkipStream = new InputStream() {
+            private int pos = 0;
+
+            @Override
+            public int read() {
+                return pos < data.length ? data[pos++] : -1;
+            }
+
+            @Override
+            public long skip(long n) {
+                return 0; // pretend skip never makes progress, forcing the fallback path
+            }
+        };
+
+        ChunkPlanner.skipFully(zeroSkipStream, 5);
+
+        assertEquals('f', zeroSkipStream.read(), "the next unread byte after skipping 5 of 'abcdefghij' should be 'f'");
+    }
+
+    @Test
+    void skipFullyStopsCleanlyAtEofEvenIfMoreWasRequestedThanTheStreamHas() throws IOException {
+        InputStream shortStream = new ByteArrayInputStream("abc".getBytes(StandardCharsets.UTF_8)) {
+            @Override
+            public long skip(long n) {
+                return 0; // force the single-byte fallback path here too
+            }
+        };
+
+        ChunkPlanner.skipFully(shortStream, 100);
+
+        assertEquals(-1, shortStream.read(), "should have stopped at EOF rather than hanging or throwing");
     }
 
     private static void assertRangesReconstructWholeFileWithNoGapsOrOverlaps(List<ChunkRange> ranges, long start, long end) {

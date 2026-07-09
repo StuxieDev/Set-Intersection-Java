@@ -25,4 +25,16 @@ class JsonWriterTest {
     void controlCharactersAreEscaped() {
         assertEquals("a\\nb\\tc", JsonWriter.escape("a\nb\tc"));
     }
+
+    @Test
+    void carriageReturnIsEscaped() {
+        assertEquals("a\\rb", JsonWriter.escape("a\rb"));
+    }
+
+    /** `\n`, `\r`, `\t` have their own named escapes above; any other control character below 0x20 falls through to the generic `\\u00xx` form. */
+    @Test
+    void otherControlCharactersUseTheGenericUnicodeEscape() {
+        String controlCharacter = String.valueOf((char) 1);
+        assertEquals("a\\u0001b", JsonWriter.escape("a" + controlCharacter + "b"));
+    }
 }

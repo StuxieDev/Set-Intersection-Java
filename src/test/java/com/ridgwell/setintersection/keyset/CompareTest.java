@@ -68,6 +68,32 @@ class CompareTest {
         assertEquals(0, overlap.total());
     }
 
+    /**
+     * Every other test in this file happens to compare two {@code Counts} with equal
+     * distinct-key counts, so {@code compare}'s "walk whichever side has fewer distinct
+     * keys" swap (`if (b.distinct() < a.distinct())`) never actually triggers in any of
+     * them. This one deliberately gives {@code b} fewer distinct keys than {@code a} so
+     * the swap branch runs, not just the no-swap one.
+     */
+    @Test
+    void compareStillWorksWhenBHasFewerDistinctKeysThanA() {
+        Counts a = new Counts("a");
+        for (String key : List.of("A", "B", "C", "D", "E")) {
+            a.recordKey(key);
+        }
+        Counts b = new Counts("b");
+        b.recordKey("A");
+        b.recordKey("A");
+        b.recordKey("B");
+
+        assertTrue(b.distinct() < a.distinct(), "test setup should give b fewer distinct keys than a");
+
+        Overlap overlap = Compare.compare(a, b);
+
+        assertEquals(2, overlap.distinct());
+        assertEquals(3, overlap.total());
+    }
+
     @Test
     void totalOverlapUsesLongSoItDoesNotOverflowA32BitInt() {
         Counts a = new Counts("a");

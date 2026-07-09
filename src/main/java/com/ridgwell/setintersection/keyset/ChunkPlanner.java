@@ -102,8 +102,16 @@ final class ChunkPlanner {
         return boundaries;
     }
 
-    /** {@code InputStream.skip} is allowed to skip fewer bytes than asked, so this keeps retrying until {@code n} bytes are gone. */
-    private static void skipFully(InputStream in, long n) throws IOException {
+    /**
+     * {@code InputStream.skip} is allowed to skip fewer bytes than asked (even zero,
+     * with more data still available), so this keeps retrying - falling back to a
+     * single-byte read to force progress - until {@code n} bytes are gone or EOF is hit.
+     * Package-private rather than {@code private} so {@code ChunkPlannerTest} can drive
+     * the zero-skip fallback directly: a real file's {@code InputStream} reliably skips
+     * everything it's asked to in one call, so that branch never actually runs in any
+     * test that goes through {@link #findBoundaries} on genuine files.
+     */
+    static void skipFully(InputStream in, long n) throws IOException {
         while (n > 0) {
             long skipped = in.skip(n);
             if (skipped <= 0) {

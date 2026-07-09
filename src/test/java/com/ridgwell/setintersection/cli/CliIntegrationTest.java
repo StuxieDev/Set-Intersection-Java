@@ -173,4 +173,60 @@ class CliIntegrationTest {
         assertEquals(0, result.exitCode());
         assertTrue(result.stdout().contains("Usage:"));
     }
+
+    /** {@code -h} is a separate registered flag from {@code -help} - this exercises that alias on its own, not alongside {@code -help}. */
+    @Test
+    void hShortFlagAloneAlsoPrintsUsageAndExitsZero() {
+        Result result = run("-h");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.stdout().contains("Usage:"));
+    }
+
+    /**
+     * {@code missingRequiredArgsIsAnError} exercises a {@code CliUsageException} thrown
+     * from inside {@code runWithOptions} (a missing required flag). This one instead makes
+     * {@code ArgParser.parse} itself fail - an unrecognized flag - which is caught at a
+     * different point in {@code Cli.run}, before {@code runWithOptions} is ever reached.
+     */
+    @Test
+    void unrecognizedFlagIsAnErrorBeforeRunWithOptionsIsReached(@TempDir Path dir) throws IOException {
+        Path[] files = pdfExampleFiles(dir);
+
+        Result result = run("-file1", files[0].toString(), "-file2", files[1].toString(), "-not-a-real-flag");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.stderr().contains("error:"));
+        assertTrue(result.stderr().contains("Usage:"));
+    }
+
+    /**
+     * Every other error-path test here fails validation before any file is touched
+     * (missing flags, bad flag syntax, both sides as stdin). This one gets all the way to
+     * actually trying to load a file that doesn't exist, so it's a genuine {@link IOException}
+     * from {@code TwoFileLoader.loadBoth} propagating out through {@code Cli.run}'s other
+     * catch clause, not a {@code CliUsageException}.
+     */
+    @Test
+    void missingInputFileProducesAFriendlyErrorRatherThanACrash(@TempDir Path dir) throws IOException {
+        Path file1 = writeCsv(dir, "d1.csv", List.of("A", "B"));
+        Path missing = dir.resolve("does-not-exist.csv");
+
+        Result result = run("-file1", file1.toString(), "-file2", missing.toString());
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.stderr().contains("error:"));
+        assertTrue(result.stderr().contains("does-not-exist.csv"), "expected the missing path in the error, got: " + result.stderr());
+    }
+
+    /** An empty entry in a composite spec (a stray comma) is caught by {@code Cli.splitColumns}, not by column resolution further down. */
+    @Test
+    void emptyEntryInACompositeColumnSpecIsAnError(@TempDir Path dir) throws IOException {
+        Path[] files = pdfExampleFiles(dir);
+
+        Result result = run("-file1", files[0].toString(), "-file2", files[1].toString(), "-column", "a,,b");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.stderr().contains("error:"));
+    }
 }
