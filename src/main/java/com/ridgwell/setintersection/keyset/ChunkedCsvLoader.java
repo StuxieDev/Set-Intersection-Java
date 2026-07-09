@@ -178,6 +178,7 @@ final class ChunkedCsvLoader {
             this.remaining = limit;
         }
 
+        /** Stops returning bytes (reports EOF) once {@code remaining} hits zero, even if the delegate stream has more. */
         @Override
         public int read() throws IOException {
             if (remaining <= 0) {
@@ -205,6 +206,7 @@ final class ChunkedCsvLoader {
             return n;
         }
 
+        /** Closes the underlying channel-backed stream. */
         @Override
         public void close() throws IOException {
             delegate.close();

@@ -14,6 +14,7 @@ public final class KeysetException extends IOException {
 
     private static final long serialVersionUID = 1L;
 
+    /** For a failure with nothing lower-level to wrap - the message alone explains it (e.g. an unresolved header column). */
     public KeysetException(String message) {
         super(message);
     }

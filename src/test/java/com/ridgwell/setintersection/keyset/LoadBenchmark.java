@@ -38,6 +38,7 @@ public final class LoadBenchmark {
     private LoadBenchmark() {
     }
 
+    /** Runs the high- then low-cardinality scenarios back to back and prints both reports. */
     public static void main(String[] args) throws IOException {
         System.out.println("Available processors: " + Runtime.getRuntime().availableProcessors());
         System.out.println();
