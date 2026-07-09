@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TwoFileLoaderTest {
@@ -55,7 +56,7 @@ class TwoFileLoaderTest {
         Path missing1 = dir.resolve("nope1.csv");
         Path missing2 = dir.resolve("nope2.csv");
 
-        IOException ex = org.junit.jupiter.api.Assertions.assertThrows(IOException.class, () ->
+        IOException ex = assertThrows(IOException.class, () ->
                 TwoFileLoader.loadBoth(
                         new RegularFileSource(missing1), Options.singleColumn(false, "0", ','),
                         new RegularFileSource(missing2), Options.singleColumn(false, "0", ',')));

@@ -62,13 +62,22 @@ class ChunkedCsvLoaderAwaitTest {
      * turns out to be too short, since {@code Thread.interrupt()} just sets a flag that
      * persists until consumed, so an interrupt arriving fractionally before the thread
      * reaches {@code get()} still gets picked up the instant it does.
+     *
+     * <p>Deliberately not try-with-resources for the executor: its task is designed to
+     * never finish on its own (that's the point - {@code await} has to be the thing that
+     * gives up on it via interruption, not the task completing). {@code ExecutorService.close()}'s
+     * default implementation only escalates to {@code shutdownNow()} if the thread calling
+     * {@code close()} itself gets interrupted while waiting - which the JUnit thread here
+     * never is - so relying on it would hang this test indefinitely. Explicit
+     * {@code shutdownNow()} in a {@code finally} sidesteps that entirely.
      */
     @Test
     void interruptionIsPropagatedAsIOExceptionWithTheInterruptFlagRestored() throws Exception {
         CountDownLatch taskStarted = new CountDownLatch(1);
         CountDownLatch neverReleased = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
 
-        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+        try {
             Future<Counts> future = executor.submit(() -> {
                 taskStarted.countDown();
                 neverReleased.await();
@@ -95,6 +104,8 @@ class ChunkedCsvLoaderAwaitTest {
 
             assertInstanceOf(IOException.class, thrown.get());
             assertTrue(interruptedAfter.get());
+        } finally {
+            executor.shutdownNow();
         }
     }
 }

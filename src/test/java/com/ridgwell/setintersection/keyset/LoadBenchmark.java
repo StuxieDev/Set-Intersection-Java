@@ -49,6 +49,7 @@ public final class LoadBenchmark {
         runScenario("Low cardinality", ROW_COUNT, 1_000);
     }
 
+    /** Generates one synthetic file, then times serial vs. chunked loading on it and prints the comparison. */
     private static void runScenario(String label, int rowCount, int distinctKeys) throws IOException {
         System.out.println(label + " (" + rowCount + " rows, " + distinctKeys + " distinct keys)");
 
@@ -85,11 +86,13 @@ public final class LoadBenchmark {
         }
     }
 
+    /** Just something with a {@code load()} method that can throw - lets {@code timeRuns} take either the serial or chunked call as a plain lambda. */
     @FunctionalInterface
     private interface Loader {
         Counts load() throws IOException;
     }
 
+    /** Runs {@code loader} {@link #TIMED_RUNS} times, printing each run and returning the average in seconds. */
     private static double timeRuns(String label, Loader loader) throws IOException {
         System.out.println(label + ":");
         long total = 0;
@@ -103,6 +106,7 @@ public final class LoadBenchmark {
         return total / (double) TIMED_RUNS / 1e9;
     }
 
+    /** Writes {@code rowCount} rows of a single {@code key-<n>} column, {@code n} drawn from {@code [0, distinctKeys)}. */
     private static void generate(Path path, int rowCount, int distinctKeys) throws IOException {
         Random random = new Random(42);
         try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {

@@ -9,6 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      # Just one version for now (this project needs 21+ for virtual threads and pattern
+      # matching for switch) - a matrix entry so bumping the JDK later is a one-line change.
       matrix:
         java: [21]
     steps:
@@ -21,6 +23,9 @@ jobs:
           distribution: temurin
           cache: maven
 
+      # `verify`, not `test` - this also runs the JaCoCo coverage gate and the SpotBugs
+      # check, both bound to the verify phase, so a coverage drop or a real bug pattern
+      # fails CI the same way a broken test would.
       - name: Build and test
         run: mvn -B verify
 
