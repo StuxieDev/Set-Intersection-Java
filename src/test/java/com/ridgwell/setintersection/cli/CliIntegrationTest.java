@@ -88,7 +88,7 @@ class CliIntegrationTest {
                 + "    {\n"
                 + "      \"path\": \"" + JsonWriter.escape(files[1].toString()) + "\",\n"
                 + "      \"keys\": 9,\n"
-                + "      \"distinct\": 7\n"
+                + "      \"distinct\": 6\n"
                 + "    }\n"
                 + "  ],\n"
                 + "  \"distinct_overlap\": 4,\n"
