@@ -15,6 +15,7 @@
     <junit.version>5.10.2</junit.version>
     <jacoco.version>0.8.12</jacoco.version>
     <spotbugs.version>4.8.6.4</spotbugs.version>
+    <javadoc.version>3.6.3</javadoc.version>
   </properties>
 
   <!-- Standard library only at runtime. JUnit 5 is test-scoped tooling, not an
@@ -101,6 +102,20 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <!-- Not bound to any phase - available on demand via `mvn javadoc:javadoc`,
+             output under target/site/apidocs. doclint stays on for real problems (a
+             @link to something that doesn't exist, malformed HTML) but "missing" is
+             turned off, since plenty of one-line summaries here deliberately skip
+             @param/@return on self-explanatory methods. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>${javadoc.version}</version>
+        <configuration>
+          <doclint>all,-missing</doclint>
+          <quiet>false</quiet>
+        </configuration>
       </plugin>
       <plugin>
         <!-- Static analysis. Bound to `verify`, so a real bug-pattern finding fails the
