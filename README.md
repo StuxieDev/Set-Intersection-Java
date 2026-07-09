@@ -196,16 +196,21 @@ drive them directly rather than contort a CLI or chunked-load scenario into hitt
 specific branch by accident.
 
 There's also `ChunkedCsvLoaderAwaitTest`, for the same reason as `TwoFileLoaderTest`'s
-interruption test: `ChunkedCsvLoader.await` unwraps whatever a chunk's virtual-thread task
+interruption tests: `ChunkedCsvLoader.await` unwraps whatever a chunk's virtual-thread task
 failed with, and getting a real chunk to fail with a non-`IOException` cause on demand
 isn't practical, so `await` is package-private too and the test hands it a hand-built
-`Future` directly.
+`Future` directly. `TwoFileLoader` had the identical gap - `loadBoth` has separate
+try/catch blocks for file1 and file2 that read alike, and only file1's was ever exercised,
+so `unwrap`'s non-`IOException` branch and file2's interrupted-and-only-file2-fails paths
+went uncovered until I checked for the same pattern there too and added the missing half.
+Both classes are at 100% line coverage now.
 
 ## CI and static analysis
 
 `mvn verify` runs the full test suite, then [JaCoCo](https://www.jacoco.org/jacoco/) (coverage
 gate) and [SpotBugs](https://spotbugs.github.io/) (static analysis), and fails if either one
-finds something. `.github/workflows/ci.yml` runs the same `mvn verify` on every push and PR.
+finds something. `.github/workflows/ci.yml` runs the same `mvn verify` on every push and PR -
+confirmed actually green on GitHub's own runners via `gh run list`, not just locally.
 
 SpotBugs flagged one thing worth mentioning rather than just silencing:
 `ArgParser.usage()` and `TableWriter.write()` build output with a literal `\n`, and
