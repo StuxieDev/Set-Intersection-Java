@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="450" alt="Set-Intersection">
+</p>
+
 # set-intersection
 
 > Originally written in Go by Leo Ridgwell as a technical test submission.
