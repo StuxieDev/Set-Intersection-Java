@@ -1,6 +1,6 @@
 # set-intersection
 
-> Originally written in Go by Leo Ridgwell as a technical test submission for InfoSum.
+> Originally written in Go by Leo Ridgwell as a technical test submission.
 > Rebuilt in Java for a Senior Java Engineer application. JDK standard library only, no
 > application frameworks - Maven for the build, JUnit 5 for tests, JaCoCo and SpotBugs as
 > quality gates, GitHub Actions running all of it on every push.
@@ -13,7 +13,7 @@ Compares the keys in two CSV files and reports:
 - the total overlap (see [How overlap is defined](#how-overlap-is-defined) below)
 
 `examples/A_f.csv` and `examples/B_f.csv` are the sample datasets from the original
-InfoSum task - single-column CSVs of UDPRN keys with a header row.
+set-intersection task - single-column CSVs of UDPRN keys with a header row.
 
 ## Layout
 
