@@ -314,3 +314,7 @@ error bound reported alongside, per the task's own note about that.
   CLI's own comma-splitting for `-column`/`-column1`/`-column2` would misread it. Known
   limitation, not fixed.
 - A Dockerfile or a GraalVM native image, so running this doesn't need a JDK installed.
+
+---
+
+*Built & Maintained by <img src="https://github.com/StuxieDev.png" height="14" alt="StuxieDev" valign="middle"> [StuxieDev](https://github.com/StuxieDev).*
