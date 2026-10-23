@@ -6,7 +6,7 @@
 
   <groupId>com.ridgwell</groupId>
   <artifactId>set-intersection</artifactId>
-  <version>1.0.0</version>
+  <version>26.10.2300</version>
   <packaging>jar</packaging>
 
   <properties>
